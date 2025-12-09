@@ -1,0 +1,5 @@
+{
+  "name": "AI Agent Visual World",
+  "description": "A frontend MVP for an AI Agent Visual World simulation using React, Phaser 3, and Socket.IO.",
+  "requestFramePermissions": []
+}
