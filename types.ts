@@ -1,5 +1,14 @@
 
+import { BuildingType, PlantType } from './src/config/EnvironmentRegistry';
+
 export type AgentState = 'idle' | 'moving' | 'chatting';
+
+export interface ChatMessage {
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
 
 export interface AgentData {
   id: string;
@@ -7,10 +16,37 @@ export interface AgentData {
   gridY: number;
   state: AgentState;
   lastMessage?: string;
+  conversationPartnerId?: string;
+  activeConversation?: ChatMessage[];
   name?: string; 
   bio?: string;  
   color?: number; 
   characterId?: number; // Index in the sprite sheet (0-63)
+  job?: string; // Job role mapped to JOB_SKINS
+}
+
+// Environment Objects
+export interface EnvironmentObject {
+  id: string;
+  type: 'building' | 'plant';
+  gridX: number;
+  gridY: number;
+  width: number;
+  height: number;
+  color: number;
+  secondaryColor?: number; // for details like roofs or leaf colors
+}
+
+export interface BuildingObject extends EnvironmentObject {
+  type: 'building';
+  buildingType: BuildingType;
+  isPassable: boolean;
+}
+
+export interface PlantObject extends EnvironmentObject {
+  type: 'plant';
+  plantType: PlantType;
+  canWalkThrough: boolean;
 }
 
 export interface WorldUpdate {

@@ -1,16 +1,34 @@
 
 import React, { useState } from 'react';
 import { GameView } from './components/GameView';
+import { AgentCreator } from './src/components/AgentCreator';
 import { AgentData } from './types';
 
 const App: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isCreatorOpen, setCreatorOpen] = useState(false);
 
   // Callback passed to Phaser logic
   const handleAgentSelect = (agent: AgentData) => {
     setSelectedAgent(agent);
     setSidebarOpen(true);
+  };
+
+  const handleCreateAgent = (newAgent: Partial<AgentData>) => {
+    // In a real app, we would send this to the backend via Socket.io or REST API
+    // For now, we'll just log it. The GameView/MainScene needs a way to receive this.
+    // Since GameView is a wrapper around Phaser, we might need to expose a method or use a context/event bus.
+    // However, for this demo, we can just log it and maybe emit a socket event if the socket was accessible here.
+    console.log("Creating new agent:", newAgent);
+    
+    // Ideally, we emit to the socket here if we had access to it.
+    // Since the socket is inside MainScene, we can't easily reach it from here without lifting state up or using a global socket.
+    // But we can simulate it by dispatching a custom event that MainScene listens to, or just assume the backend handles it.
+    
+    // Dispatch a custom event that MainScene can listen to
+    const event = new CustomEvent('create-agent', { detail: newAgent });
+    window.dispatchEvent(event);
   };
 
   return (
@@ -29,7 +47,25 @@ const App: React.FC = () => {
             </div>
             <p className="text-xs text-gray-500 mt-2">WASD / Arrows to move camera</p>
         </div>
+
+        {/* Create Agent Button */}
+        <div className="absolute bottom-6 left-6 pointer-events-auto">
+          <button 
+            onClick={() => setCreatorOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg font-bold shadow-lg shadow-emerald-900/30 flex items-center gap-2 transition-all transform hover:scale-105"
+          >
+            <span className="text-xl">+</span> Create Agent
+          </button>
+        </div>
       </div>
+
+      {/* Agent Creator Modal */}
+      {isCreatorOpen && (
+        <AgentCreator 
+          onClose={() => setCreatorOpen(false)} 
+          onCreate={handleCreateAgent}
+        />
+      )}
 
       {/* 2. UI Layer (Sidebar) */}
       {isSidebarOpen && (
@@ -96,17 +132,55 @@ const App: React.FC = () => {
 
                     {/* Chat Terminal */}
                     <div className="space-y-3">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Communication Log</h4>
-                        <div className="bg-black rounded-lg p-4 text-sm font-mono border border-gray-800 min-h-[100px] shadow-inner relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent"></div>
-                            {selectedAgent.lastMessage ? (
-                                <p className="text-emerald-400">
-                                    <span className="text-emerald-700 mr-2">{'>'}</span>
-                                    {selectedAgent.lastMessage}
-                                    <span className="animate-pulse">_</span>
-                                </p>
+                        <div className="flex justify-between items-end">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                                {selectedAgent.activeConversation && selectedAgent.activeConversation.length > 0 
+                                    ? 'Live Feed' 
+                                    : 'Communication Log'}
+                            </h4>
+                            {selectedAgent.conversationPartnerId && (
+                                 <span className="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-900/50">
+                                    Link: {selectedAgent.conversationPartnerId.substring(0, 8)}...
+                                 </span>
+                            )}
+                        </div>
+                        
+                        <div className="bg-black rounded-lg p-4 text-sm font-mono border border-gray-800 min-h-[150px] max-h-[300px] overflow-y-auto shadow-inner relative flex flex-col gap-3 custom-scrollbar">
+                            {selectedAgent.activeConversation && selectedAgent.activeConversation.length > 0 ? (
+                                <>
+                                    {selectedAgent.activeConversation.map((msg, idx) => {
+                                        const isSelf = msg.senderId === selectedAgent.id;
+                                        return (
+                                            <div key={idx} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
+                                                <div className={`max-w-[85%] rounded-lg p-2 text-xs ${
+                                                    isSelf 
+                                                        ? 'bg-emerald-900/40 text-emerald-100 border border-emerald-800/50 rounded-br-none' 
+                                                        : 'bg-gray-800 text-gray-300 border border-gray-700 rounded-bl-none'
+                                                }`}>
+                                                    <p className="font-bold text-[10px] mb-0.5 opacity-50 uppercase">
+                                                        {isSelf ? 'YOU' : msg.senderName}
+                                                    </p>
+                                                    {msg.text}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {/* Scroll Anchor */}
+                                    <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
+                                </>
                             ) : (
-                                <p className="italic text-gray-700 text-xs">Awaiting signal...</p>
+                                <div className="relative h-full flex flex-col justify-end min-h-[100px]">
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent"></div>
+                                    {selectedAgent.lastMessage ? (
+                                        <p className="text-emerald-400">
+                                            <span className="text-emerald-700 mr-2">{'>'}</span>
+                                            {selectedAgent.lastMessage}
+                                            <span className="animate-pulse">_</span>
+                                        </p>
+                                    ) : (
+                                        <p className="italic text-gray-700 text-xs">Awaiting signal...</p>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
