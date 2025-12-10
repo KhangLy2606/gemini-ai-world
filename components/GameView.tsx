@@ -5,17 +5,20 @@ import { AgentData } from '../types';
 
 interface GameViewProps {
   onAgentSelect: (agent: AgentData) => void;
+  onConversationUpdate?: (detail: any) => void;
 }
 
-export const GameView: React.FC<GameViewProps> = ({ onAgentSelect }) => {
+export const GameView: React.FC<GameViewProps> = ({ onAgentSelect, onConversationUpdate }) => {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const onAgentSelectRef = useRef(onAgentSelect);
+  const onConversationUpdateRef = useRef(onConversationUpdate);
 
   // Keep the ref current to avoid re-initializing game on prop change
   useEffect(() => {
     onAgentSelectRef.current = onAgentSelect;
-  }, [onAgentSelect]);
+    onConversationUpdateRef.current = onConversationUpdate;
+  }, [onAgentSelect, onConversationUpdate]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -51,7 +54,8 @@ export const GameView: React.FC<GameViewProps> = ({ onAgentSelect }) => {
         // Stop the auto-started scene and restart with our React props
         game.scene.stop('MainScene');
         game.scene.start('MainScene', { 
-            onAgentSelect: (agent: AgentData) => onAgentSelectRef.current(agent) 
+            onAgentSelect: (agent: AgentData) => onAgentSelectRef.current(agent),
+            onConversationUpdate: (detail: any) => onConversationUpdateRef.current && onConversationUpdateRef.current(detail)
         });
     });
 

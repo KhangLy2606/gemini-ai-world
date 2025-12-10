@@ -2,13 +2,18 @@
 import React, { useState } from 'react';
 import { GameView } from './components/GameView';
 import { AgentCreator } from './src/components/AgentCreator';
-import { AgentData } from './types';
+import { AgentData, ConversationStreamEventDetail, PartialMessage } from './types';
 import { getCharacterByJob, getCharacterById } from './src/config/CharacterRegistry';
+import { sanitizeMessage } from './src/utils/sanitize';
 
 const App: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isCreatorOpen, setCreatorOpen] = useState(false);
+  
+  // Streaming state
+  const [partialMessage, setPartialMessage] = useState<PartialMessage | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
 
   // Callback passed to Phaser logic
   const handleAgentSelect = (agent: AgentData) => {
@@ -27,9 +32,33 @@ const App: React.FC = () => {
     // Since the socket is inside MainScene, we can't easily reach it from here without lifting state up or using a global socket.
     // But we can simulate it by dispatching a custom event that MainScene listens to, or just assume the backend handles it.
     
-    // Dispatch a custom event that MainScene can listen to
     const event = new CustomEvent('create-agent', { detail: newAgent });
     window.dispatchEvent(event);
+  };
+
+  const handleConversationUpdate = (detail: ConversationStreamEventDetail) => {
+      // Only update if relevant to the selected agent
+      if (!selectedAgent) return;
+      
+      // Check if this update belongs to the current conversation
+      // We assume conversationId contains agentId or we check if the sender is the selected agent or their partner
+      // For simplicity, we'll just update if we have a selected Agent, 
+      // but in production consider checking detail.conversationId equality
+      
+      if (detail.status === 'typing') {
+          setIsTyping(true);
+      } else if (detail.status === 'streaming' && detail.partialMessage) {
+          setIsTyping(false);
+          setPartialMessage(detail.partialMessage);
+      } else if (detail.status === 'complete') {
+          setIsTyping(false);
+          setPartialMessage(null);
+          // Force re-render to show the completed message which is now in history
+          setSelectedAgent(prev => prev ? {...prev} : null);
+      } else {
+          setIsTyping(false);
+          setPartialMessage(null);
+      }
   };
 
   const getAvatarStyle = (agent: AgentData) => {
@@ -71,7 +100,10 @@ const App: React.FC = () => {
       
       {/* 1. Game Layer */}
       <div className="flex-1 relative z-0">
-        <GameView onAgentSelect={handleAgentSelect} />
+        <GameView 
+            onAgentSelect={handleAgentSelect} 
+            onConversationUpdate={handleConversationUpdate}
+        />
         
         {/* HUD Overlay */}
         <div className="absolute top-4 left-4 p-3 bg-gray-900/80 backdrop-blur-md rounded-lg border border-gray-700/50 pointer-events-none shadow-lg">
@@ -187,7 +219,7 @@ const App: React.FC = () => {
                                                     <p className="font-bold text-[10px] mb-0.5 opacity-50 uppercase">
                                                         {isSelf ? 'YOU' : msg.senderName}
                                                     </p>
-                                                    {msg.text}
+                                                    {sanitizeMessage(msg.text)}
                                                 </div>
                                             </div>
                                         );
@@ -196,6 +228,39 @@ const App: React.FC = () => {
                                     <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
                                 </>
                             ) : (
+                                // Logic for empty history...
+                                // We'll handle empty state below if no partial message
+                                <></>
+                            )}
+
+                            {/* Streaming Partial Message */}
+                            {partialMessage && (
+                                <div className="flex justify-start">
+                                    <div className="max-w-[85%] bg-gray-800 text-gray-400 rounded-lg p-2 text-xs border border-gray-700 rounded-bl-none">
+                                        <p className="font-bold text-[10px] mb-0.5 opacity-50 uppercase">
+                                            {partialMessage.senderName}
+                                        </p>
+                                        <p className="text-gray-300">
+                                            {sanitizeMessage(partialMessage.accumulatedText)}
+                                            <span className="animate-pulse ml-1 text-emerald-400">▊</span>
+                                        </p>
+                                    </div>
+                                    <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
+                                </div>
+                            )}
+
+                             {/* Typing Indicator */}
+                            {isTyping && !partialMessage && (
+                                <div className="flex justify-start">
+                                    <div className="bg-gray-800 text-gray-400 rounded-lg p-2 text-xs italic border border-gray-700 rounded-bl-none">
+                                        <span className="animate-pulse">Thinking...</span>
+                                    </div>
+                                     <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
+                                </div>
+                            )}
+
+                            {/* Empty State (only if no history and no streaming) */}
+                            {(!selectedAgent.activeConversation || selectedAgent.activeConversation.length === 0) && !partialMessage && !isTyping && (
                                 <div className="relative h-full flex flex-col justify-end min-h-[100px]">
                                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent"></div>
                                     {selectedAgent.lastMessage ? (
