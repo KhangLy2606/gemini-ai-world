@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { GameView } from './components/GameView';
 import { AgentCreator } from './src/components/AgentCreator';
 import { AgentData } from './types';
+import { getCharacterByJob, getCharacterById } from './src/config/CharacterRegistry';
 
 const App: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
@@ -31,6 +32,40 @@ const App: React.FC = () => {
     window.dispatchEvent(event);
   };
 
+  const getAvatarStyle = (agent: AgentData) => {
+    // Look up character from registry
+    let character;
+    
+    if (agent.spriteKey) {
+      // Use spriteKey if available (custom characters)
+      character = getCharacterById(agent.spriteKey);
+    } else if (agent.job) {
+      // Fall back to job-based lookup
+      character = getCharacterByJob(agent.job);
+    } else {
+      // Default fallback
+      character = getCharacterById('TECH_DEV_MALE');
+    }
+    
+    // Calculate sprite position from frame index
+    const frameX = (character.frameIndex % 16) * 32;
+    const frameY = Math.floor(character.frameIndex / 16) * 32;
+    
+    // We want to display it at 2.5x scale (32px -> 80px)
+    const scale = 2.5;
+    const sheetSize = 512;
+    
+    return {
+        backgroundImage: `url(${character.spritePath})`,
+        backgroundPosition: `-${frameX * scale}px -${frameY * scale}px`,
+        backgroundSize: `${sheetSize * scale}px ${sheetSize * scale}px`,
+        width: '100%',
+        height: '100%',
+        imageRendering: 'pixelated' as const,
+        backgroundColor: '#222'
+    };
+  };
+
   return (
     <div className="flex h-screen w-screen bg-gray-950 text-white font-sans overflow-hidden">
       
@@ -45,7 +80,8 @@ const App: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                 <span className="text-xs text-gray-300">Live Simulation</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2">WASD / Arrows to move camera</p>
+            <p className="text-xs text-gray-500 mt-2">WASD / Arrows: Pan Camera</p>
+            <p className="text-xs text-gray-500">Mouse Wheel / +/-: Zoom</p>
         </div>
 
         {/* Create Agent Button */}
@@ -96,17 +132,8 @@ const App: React.FC = () => {
                             <div 
                                 className="w-20 h-20 rounded-xl border border-gray-600 bg-gray-800 flex items-center justify-center text-3xl shadow-inner overflow-hidden"
                             >
-                                {/* In a real app, render the sprite frame here via canvas or background-image */}
-                                <div style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    backgroundColor: selectedAgent.color ? `#${selectedAgent.color.toString(16)}` : '#333',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}>
-                                   {selectedAgent.name ? selectedAgent.name[0] : '#'}
-                                </div>
+                                {/* Render the sprite frame here */}
+                                <div style={getAvatarStyle(selectedAgent)} />
                             </div>
                             <div className="absolute -bottom-2 -right-2 bg-gray-800 text-xs px-2 py-0.5 rounded border border-gray-600 font-mono">
                                 ID:{selectedAgent.characterId ?? 0}

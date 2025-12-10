@@ -21,8 +21,9 @@ export interface AgentData {
   name?: string; 
   bio?: string;  
   color?: number; 
-  characterId?: number; // Index in the sprite sheet (0-63)
-  job?: string; // Job role mapped to JOB_SKINS
+  characterId?: number; // Index in the sprite sheet (0-63) - deprecated, use spriteKey
+  job?: string; // Job role mapped to CHARACTER_REGISTRY
+  spriteKey?: string; // Custom sprite texture key from CharacterRegistry
 }
 
 // Environment Objects

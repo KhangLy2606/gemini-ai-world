@@ -3,8 +3,10 @@ import Phaser from 'phaser';
 import { io, Socket } from 'socket.io-client';
 import { AgentData, SceneInitData, WorldUpdate, TILE_SIZE, TICK_DURATION, ChatMessage } from '../types';
 import { JOB_SKINS, JobRole } from '../src/config/JobRegistry';
+import { getCharacterByJob, getCharacterById, CHARACTER_REGISTRY, CharacterDefinition } from '../src/config/CharacterRegistry';
 import { EnvironmentManager } from '../src/game/EnvironmentManager';
 import { EnvironmentRenderer } from '../src/game/EnvironmentRenderer';
+import { CollisionManager } from '../src/game/CollisionManager';
 
 interface ConversationScript {
     topic: string;
@@ -45,6 +47,7 @@ export class MainScene extends Phaser.Scene {
   private socket: Socket | null = null;
   private agents: Map<string, Phaser.GameObjects.Sprite> = new Map();
   private agentNameTags: Map<string, Phaser.GameObjects.Text> = new Map();
+  private agentShadows: Map<string, Phaser.GameObjects.Graphics> = new Map();
   private onAgentSelect?: (agent: AgentData) => void;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   
@@ -54,10 +57,12 @@ export class MainScene extends Phaser.Scene {
   // Environment System
   private environmentManager?: EnvironmentManager;
   private environmentRenderer?: EnvironmentRenderer;
+  private collisionManager?: CollisionManager;
 
   // Mock Simulation State
   private useMockData = true; // Set to true to see the world without a backend
   private mockTickTimer?: Phaser.Time.TimerEvent;
+  private mockAgents: AgentData[] = []; // Persistent mock agents array for agent creation
   
   // Conversation Director State
   private activeConversations: Map<string, {
@@ -68,6 +73,13 @@ export class MainScene extends Phaser.Scene {
       lastUpdateTick: number;
   }> = new Map();
 
+  // Zoom State
+  private currentZoom = 2;
+  private minZoom = 1;
+  private maxZoom = 4;
+  private zoomSpeed = 0.1;
+  private zoomUI?: Phaser.GameObjects.Text;
+
   constructor() {
     super({ key: 'MainScene' });
   }
@@ -77,6 +89,26 @@ export class MainScene extends Phaser.Scene {
   }
 
   preload() {
+    // Load new pixel art assets
+    this.load.image('grass_tileset', '/assets/grass_tileset.png');
+    this.load.spritesheet('water_tileset', '/assets/water_tileset.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('path_tileset', '/assets/path_tileset.png', { frameWidth: 32, frameHeight: 32 });
+    
+    this.load.spritesheet('minions_atlas', '/assets/minions_atlas.png', { 
+        frameWidth: 32, 
+        frameHeight: 32 
+    });
+    
+    this.load.spritesheet('buildings_atlas', '/assets/buildings_atlas.png', { 
+        frameWidth: 32, 
+        frameHeight: 32 
+    });
+    
+    this.load.spritesheet('plants_props_atlas', '/assets/plants_props_atlas.png', { 
+        frameWidth: 32, 
+        frameHeight: 32 
+    });
+
     // Load the character sprite sheet.
     // Adjusted to use 'agent_atlas' and 32x32 size as requested
     this.load.spritesheet('agent_atlas', '/assets/jobs_atlas.png', { 
@@ -97,6 +129,8 @@ export class MainScene extends Phaser.Scene {
     this.createWorld();
     this.setupSocket();
     this.setupInput();
+    this.setupZoomControls();
+    // Note: Animations removed - using single-frame static sprites
 
     // Generate fallback textures if assets failed to load (for robust demo)
     if (!this.textures.exists('characters')) {
@@ -106,7 +140,10 @@ export class MainScene extends Phaser.Scene {
     // Camera Setup
     this.cameras.main.setZoom(2);
     this.cameras.main.centerOn(400, 300);
-    this.cameras.main.setBackgroundColor('#2d2d2d');
+    this.cameras.main.setBackgroundColor('#3a5a3a'); // Match game background color (lighter green-tinted)
+    
+    // Add post-processing effects for visual polish
+    this.addPostProcessingEffects();
 
     if (this.input.keyboard) {
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -118,47 +155,92 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Get character definition from agent data
+   * Uses spriteKey if available, otherwise looks up by job
+   */
+  private getCharacterForAgent(agentData: AgentData): CharacterDefinition {
+    // First check for custom spriteKey
+    if (agentData.spriteKey && CHARACTER_REGISTRY[agentData.spriteKey]) {
+      return CHARACTER_REGISTRY[agentData.spriteKey];
+    }
+    
+    // Fall back to job-based lookup
+    if (agentData.job) {
+      return getCharacterByJob(agentData.job);
+    }
+    
+    // Default fallback
+    return getCharacterById('TECH_DEV_MALE');
+  }
+
+  /**
+   * Add post-processing effects for visual polish
+   * Includes: subtle vignette, color grading, and optional scanlines
+   */
+  private addPostProcessingEffects(): void {
+    // Add subtle vignette overlay (reduced intensity)
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    
+    const vignetteGraphics = this.add.graphics();
+    vignetteGraphics.setScrollFactor(0);
+    vignetteGraphics.setDepth(10000);
+    
+    // Radial gradient vignette (lighter, less intense)
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+    
+    for (let radius = maxRadius; radius > 0; radius -= 10) {
+      const alpha = Math.max(0, Math.min(0.2, (radius / maxRadius - 0.6) * 0.5));
+      vignetteGraphics.fillStyle(0x000000, alpha * 0.15); // Reduced from 0.3 to 0.15
+      vignetteGraphics.fillCircle(centerX, centerY, radius);
+    }
+    
+    // Optional: Matrix-themed green tint (subtle)
+    const tintGraphics = this.add.graphics();
+    tintGraphics.setScrollFactor(0);
+    tintGraphics.setDepth(9999);
+    tintGraphics.fillStyle(0x00ff88, 0.01); // Reduced from 0.02 to 0.01
+    tintGraphics.fillRect(0, 0, width, height);
+    
+    // Optional: CRT scanlines effect (lighter)
+    const scanlinesGraphics = this.add.graphics();
+    scanlinesGraphics.setScrollFactor(0);
+    scanlinesGraphics.setDepth(9998);
+    scanlinesGraphics.lineStyle(1, 0x000000, 0.02); // Reduced from 0.05 to 0.02
+    
+    for (let y = 0; y < height; y += 4) {
+      scanlinesGraphics.lineBetween(0, y, width, y);
+    }
+  }
+
   private handleCreateAgentEvent = (event: CustomEvent<Partial<AgentData>>) => {
     const newAgent = event.detail;
     console.log("MainScene received new agent:", newAgent);
     
-    // In a real app, we would send this to the server.
-    // For the mock simulation, we'll just add it to our local mock state.
+    // For the mock simulation, add the agent to our persistent mockAgents array
     if (this.useMockData) {
-        // We need to inject this into the mock loop somehow, or just force a tick update.
-        // Since the mock loop runs on a timer and updates `mockAgents`, we can't easily access that closure variable.
-        // A better way for the mock is to just emit a server tick with the new agent added, 
-        // but the next tick would overwrite it if we don't persist it.
-        
-        // Hack for demo: We will just manually add the sprite immediately to visualize it,
-        // even though the next mock tick might not include it (or we'd need to restart the mock).
-        // Actually, let's just restart the mock simulation with the new agent included if possible,
-        // or better yet, just let the user know it was "sent".
-        
-        // Let's try to add it to the scene directly as a "client-side predicted" entity
         const id = `custom-${Date.now()}`;
         const agentData: AgentData = {
             id,
-            gridX: newAgent.gridX || 10,
-            gridY: newAgent.gridY || 10,
+            gridX: newAgent.gridX || Math.floor(Math.random() * 20) + 10,
+            gridY: newAgent.gridY || Math.floor(Math.random() * 15) + 5,
             state: 'idle',
             name: newAgent.name || 'Custom Agent',
             bio: newAgent.bio || 'User generated.',
             job: newAgent.job || 'TECH_DEV_MALE',
+            spriteKey: newAgent.spriteKey, // Support custom character sprites
             color: Math.random() * 0xffffff,
-            lastMessage: "Hello world! I am new here."
+            lastMessage: "Hello world! I am new here.",
+            activeConversation: []
         };
         
-        // We'll treat this as a server update containing just this agent for now, 
-        // but to make it persist in the mock loop we'd need to refactor the mock loop to be a class property.
-        // For this task, simply acknowledging it in the console and showing a toast would be enough,
-        // but let's try to render it.
+        // Add to the persistent mockAgents array
+        this.mockAgents.push(agentData);
         
-        this.handleServerTick({ tick: 0, agents: [agentData] });
-        
-        // Note: In the next tick of the mock loop, this agent will disappear because the mock loop 
-        // has its own array of agents. This is expected behavior for a frontend-only mock without persistent state.
-        alert(`Agent "${agentData.name}" created! (It will appear briefly before the simulation resets)`);
+        console.log(`Agent "${agentData.name}" added to mock simulation. Total agents: ${this.mockAgents.length}`);
     }
   };
 
@@ -209,6 +291,9 @@ export class MainScene extends Phaser.Scene {
     const seed = 12345;
     this.environmentManager = new EnvironmentManager(width, height, seed);
     const environment = this.environmentManager.generateEnvironment();
+
+    // Initialize Collision Manager
+    this.collisionManager = new CollisionManager(this.environmentManager);
 
     // Initialize Environment Renderer
     this.environmentRenderer = new EnvironmentRenderer(this, seed);
@@ -262,15 +347,75 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
+  private setupZoomControls(): void {
+    // Mouse wheel zoom
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[], deltaX: number, deltaY: number) => {
+      // deltaY is positive for scrolling down (zoom out), negative for scrolling up (zoom in)
+      const zoomDelta = deltaY > 0 ? -this.zoomSpeed : this.zoomSpeed;
+      this.setZoom(this.currentZoom + zoomDelta);
+    });
+
+    // Keyboard zoom controls (+ and - keys, or [ and ])
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
+        if (event.key === '+' || event.key === '=') {
+          this.setZoom(this.currentZoom + this.zoomSpeed);
+        } else if (event.key === '-' || event.key === '_') {
+          this.setZoom(this.currentZoom - this.zoomSpeed);
+        } else if (event.key === '[') {
+          this.setZoom(this.currentZoom - this.zoomSpeed);
+        } else if (event.key === ']') {
+          this.setZoom(this.currentZoom + this.zoomSpeed);
+        }
+      });
+    }
+
+    // Create zoom level indicator UI
+    this.createZoomIndicator();
+  }
+
+  private setZoom(zoom: number): void {
+    // Clamp zoom between min and max
+    this.currentZoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoom));
+    
+    // Smooth zoom with tween
+    this.tweens.add({
+      targets: this.cameras.main,
+      zoom: this.currentZoom,
+      duration: 200,
+      ease: 'Quad.easeOut'
+    });
+
+    // Update zoom indicator
+    if (this.zoomUI) {
+      this.zoomUI.setText(`Zoom: ${(this.currentZoom * 100).toFixed(0)}%`);
+    }
+  }
+
+  private createZoomIndicator(): void {
+    this.zoomUI = this.add.text(20, 80, `Zoom: ${(this.currentZoom * 100).toFixed(0)}%`, {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#00ff88',
+      backgroundColor: '#000000aa',
+      padding: { x: 6, y: 3 }
+    });
+    this.zoomUI.setScrollFactor(0);
+    this.zoomUI.setDepth(11000);
+    this.zoomUI.setOrigin(0);
+  }
+
   // --- MOCK SIMULATION FOR DEMO ---
   private startMockSimulation() {
       console.log("Starting Mock Simulation with Conversation Engine...");
-      const mockAgents: AgentData[] = [];
+      
+      // Initialize mockAgents using the class property for persistence
+      this.mockAgents = [];
       const names = ["Neo", "Trinity", "Morpheus", "Smith", "Oracle", "Cypher", "Tank", "Dozer"];
       
       // Initialize random agents
       for(let i=0; i<15; i++) {
-          mockAgents.push({
+          this.mockAgents.push({
               id: `mock-${i}`,
               gridX: Math.floor(Math.random() * 20) + 5,
               gridY: Math.floor(Math.random() * 15) + 5,
@@ -300,8 +445,8 @@ export class MainScene extends Phaser.Scene {
                   agentsInConversation.add(state.initiatorId);
                   agentsInConversation.add(state.partnerId);
 
-                  const initiator = mockAgents.find(a => a.id === state.initiatorId);
-                  const partner = mockAgents.find(a => a.id === state.partnerId);
+                  const initiator = this.mockAgents.find(a => a.id === state.initiatorId);
+                  const partner = this.mockAgents.find(a => a.id === state.partnerId);
 
                   if (!initiator || !partner) {
                       this.activeConversations.delete(convId); // Cleanup if agents missing
@@ -347,7 +492,7 @@ export class MainScene extends Phaser.Scene {
 
               // 2. Start New Conversations (Randomly pair idle agents)
               // Filter available agents
-              const availableAgents = mockAgents.filter(a => !agentsInConversation.has(a.id) && a.state === 'idle');
+              const availableAgents = this.mockAgents.filter(a => !agentsInConversation.has(a.id) && a.state === 'idle');
               
               if (availableAgents.length >= 2 && Math.random() > 0.7) {
                   // Pick two random agents
@@ -383,22 +528,34 @@ export class MainScene extends Phaser.Scene {
               }
 
               // 3. Move Idle Agents
-              mockAgents.forEach(agent => {
+              this.mockAgents.forEach(agent => {
                   if (agentsInConversation.has(agent.id)) return; // Don't move if chatting
 
                   if (Math.random() > 0.6) {
                       agent.state = 'moving';
                       const dir = Math.floor(Math.random() * 4);
-                      if (dir === 0) agent.gridX++;
-                      else if (dir === 1) agent.gridX--;
-                      else if (dir === 2) agent.gridY++;
-                      else if (dir === 3) agent.gridY--;
+                      let nextX = agent.gridX;
+                      let nextY = agent.gridY;
+
+                      if (dir === 0) nextX++;
+                      else if (dir === 1) nextX--;
+                      else if (dir === 2) nextY++;
+                      else if (dir === 3) nextY--;
+
+                      // Check collision
+                      if (this.collisionManager?.canMoveTo(agent.gridX, agent.gridY, nextX, nextY)) {
+                          agent.gridX = nextX;
+                          agent.gridY = nextY;
+                      } else {
+                          // Blocked, stay idle
+                          agent.state = 'idle';
+                      }
                   } else {
                       agent.state = 'idle';
                   }
               });
 
-              this.handleServerTick({ tick: tickCount, agents: [...mockAgents] });
+              this.handleServerTick({ tick: tickCount, agents: [...this.mockAgents] });
           }
       });
   }
@@ -410,25 +567,64 @@ export class MainScene extends Phaser.Scene {
       currentIds.add(agentData.id);
       this.agentsDataStore.set(agentData.id, agentData);
 
-      const targetX = agentData.gridX * TILE_SIZE + (TILE_SIZE / 2);
-      const targetY = agentData.gridY * TILE_SIZE + (TILE_SIZE / 2);
+      let validGridX = agentData.gridX;
+      let validGridY = agentData.gridY;
+
+      // Validate position against collision map
+      if (this.collisionManager && !this.collisionManager.isWalkable(validGridX, validGridY)) {
+          // If position is blocked, try to stay at previous valid position
+          const sprite = this.agents.get(agentData.id);
+          if (sprite) {
+              const prevGridX = Math.floor(sprite.x / TILE_SIZE);
+              const prevGridY = Math.floor(sprite.y / TILE_SIZE);
+              if (this.collisionManager.isWalkable(prevGridX, prevGridY)) {
+                  validGridX = prevGridX;
+                  validGridY = prevGridY;
+                  // console.warn(`Agent ${agentData.id} blocked at ${agentData.gridX},${agentData.gridY}, staying at ${validGridX},${validGridY}`);
+              }
+          }
+      }
+
+      const targetX = validGridX * TILE_SIZE + (TILE_SIZE / 2);
+      const targetY = validGridY * TILE_SIZE + (TILE_SIZE / 2);
 
       let sprite = this.agents.get(agentData.id);
       let nameTag = this.agentNameTags.get(agentData.id);
 
       if (!sprite) {
-        // CREATE
-        // Use 'agent_atlas' texture. Determine frame from Job Registry.
-        const job = agentData.job as JobRole;
-        const frameIndex = JOB_SKINS[job] ?? JOB_SKINS.TECH_DEV_MALE; // Default to 0
+        // CREATE - Use CharacterRegistry for single-frame sprites
+        const characterDef = this.getCharacterForAgent(agentData);
         
-        sprite = this.add.sprite(targetX, targetY, 'agent_atlas', frameIndex);
+        // Create drop shadow for agent
+        const shadow = this.add.graphics();
+        shadow.fillStyle(0x000000, 0.3);
+        shadow.fillEllipse(targetX, targetY + 20, 18, 8);
+        shadow.setDepth(-1);
+        this.agentShadows.set(agentData.id, shadow);
+        
+        // Check if the texture exists (for custom characters)
+        let textureKey = characterDef.spriteKey;
+        let frameIndex = characterDef.frameIndex;
+        
+        if (!this.textures.exists(textureKey)) {
+          // Fallback to minions_atlas or fallback texture
+          if (this.textures.exists('minions_atlas')) {
+            textureKey = 'minions_atlas';
+            frameIndex = 0;
+          } else if (this.textures.exists('characters')) {
+            textureKey = 'characters';
+            frameIndex = 0;
+          }
+          console.warn(`Texture ${characterDef.spriteKey} not found, using fallback: ${textureKey}`);
+        }
+        
+        sprite = this.add.sprite(targetX, targetY, textureKey, frameIndex);
         sprite.setInteractive();
         sprite.setData('id', agentData.id);
         
-        // If texture failed to load and we are using white box fallback, tint it
-        if (!this.textures.exists('agent_atlas')) {
-             sprite.setTint(agentData.color || Math.random() * 0xffffff);
+        // If using fallback texture, apply color tint
+        if (textureKey === 'characters') {
+          sprite.setTint(agentData.color || Math.random() * 0xffffff);
         }
 
         sprite.on('pointerdown', () => {
@@ -471,30 +667,25 @@ export class MainScene extends Phaser.Scene {
                 ease: 'Linear'
             });
         }
-
-        // 2. Make them "Hop" to simulate life (Visual Polish)
-        const isMoving = agentData.state === 'moving';
         
-        if (isMoving) {
-            // Only add this tween if it's not already playing
-            if (!sprite.getData('isHopping')) {
-                this.tweens.add({
-                    targets: sprite,
-                    y: '-=4', // Move up 4 pixels
-                    yoyo: true, // Go back down
-                    duration: 150, // Fast hop
-                    repeat: -1, // Loop forever while moving
-                    onStart: () => sprite.setData('isHopping', true)
-                });
-            }
-        } else {
-             // Stop hopping when idle
-             if (sprite.getData('isHopping')) {
-                 this.tweens.killTweensOf(sprite); // stops movement too, but we are idle so strictly verify pos
-                 sprite.setData('isHopping', false);
-                 sprite.y = targetY; // Snap to floor (targetY is the grid center)
-                 sprite.x = targetX;
-             }
+        // Update shadow position
+        const shadow = this.agentShadows.get(agentData.id);
+        if (shadow) {
+            this.tweens.add({
+                targets: shadow,
+                x: targetX - 9, // Center the ellipse (half width)
+                y: targetY + 16, // Below sprite (half height)
+                duration: TICK_DURATION,
+                ease: 'Linear'
+            });
+        }
+        
+        // Note: Animation logic removed - using single-frame static sprites
+        // Sprites maintain their fixed frame from CharacterRegistry
+        // Position snapping for idle state
+        if (agentData.state !== 'moving' && !this.tweens.isTweening(sprite)) {
+            sprite.x = targetX;
+            sprite.y = targetY;
         }
       }
 
@@ -521,26 +712,35 @@ export class MainScene extends Phaser.Scene {
         if (!currentIds.has(id)) {
             this.agents.get(id)?.destroy();
             this.agentNameTags.get(id)?.destroy();
+            this.agentShadows.get(id)?.destroy();
             this.agents.delete(id);
             this.agentNameTags.delete(id);
+            this.agentShadows.delete(id);
             this.agentsDataStore.delete(id);
         }
     });
   }
 
   update() {
-    // Depth Sorting for Proper Layering
+    // Depth Sorting for Proper Layering (Y-Sorting for fake 3D)
     // Buildings and plants update dynamically based on their position
     // Agents are sorted by Y position for isometric-like depth
     
     for (const sprite of this.agents.values()) {
         // Agents: depth = y position (lower y = further back)
+        // This allows agents to walk "behind" buildings/trees correctly
         sprite.setDepth(sprite.y);
         
         const id = sprite.getData('id');
         const tag = this.agentNameTags.get(id);
+        const shadow = this.agentShadows.get(id);
+        
         if (tag) {
             tag.setDepth(sprite.y + 1000); // Always floating above agents
+        }
+        
+        if (shadow) {
+            shadow.setDepth(sprite.y - 5); // Shadow below agent
         }
     }
 

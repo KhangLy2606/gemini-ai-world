@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { JobRole, JOB_SKINS } from '../config/JobRegistry';
+import { CHARACTER_REGISTRY, getCharacterById, CharacterDefinition } from '../config/CharacterRegistry';
 import { ImageGenerationService } from '../services/ImageGenerationService';
 import { AgentData } from '../../types';
 
@@ -14,11 +15,15 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [selectedJob, setSelectedJob] = useState<JobRole | null>(null);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   
   // Generation State
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+
+  // Get all available characters from registry
+  const availableCharacters = Object.values(CHARACTER_REGISTRY);
 
   const handleCreate = () => {
     if (!name) return;
@@ -31,15 +36,20 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
       gridY: Math.floor(Math.random() * 15) + 5,
     };
 
-    if (mode === 'catalog' && selectedJob) {
-      newAgent.job = selectedJob;
-      // In a real app, we'd map the job to a specific sprite ID
+    if (mode === 'catalog') {
+      // Use selected character from registry or fall back to job
+      if (selectedCharacterId) {
+        const character = getCharacterById(selectedCharacterId);
+        newAgent.spriteKey = character.id;
+        newAgent.job = character.id; // Use character ID as job for backward compatibility
+      } else if (selectedJob) {
+        newAgent.job = selectedJob;
+      }
     } else if (mode === 'generate' && generatedImage) {
-      // For generated agents, we might assign a special "CUSTOM" job or handle the texture differently
-      // For now, we'll just assign a random job but conceptually it would use the custom texture
-      newAgent.job = 'TECH_DEV_MALE' as JobRole; // Fallback
-      // We would pass the generated image URL to the game to load as a texture
-      // (This part requires game engine support for dynamic texture loading)
+      // For generated agents, assign a custom character key
+      // In production, this would integrate with the ingestion tool
+      newAgent.job = 'TECH_DEV_MALE' as JobRole; // Fallback until custom texture is loaded
+      // TODO: When ingestion pipeline is ready, set newAgent.spriteKey to the generated character ID
     }
 
     onCreate(newAgent);
@@ -115,24 +125,48 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
           {/* Mode Specific Content */}
           {mode === 'catalog' ? (
             <div className="space-y-3">
-              <label className="text-xs font-bold text-gray-500 uppercase">Select Appearance</label>
+              <label className="text-xs font-bold text-gray-500 uppercase">Select Character</label>
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-60 overflow-y-auto p-2 bg-gray-950 rounded border border-gray-800">
-                {(Object.keys(JOB_SKINS) as JobRole[]).map((job) => (
-                  <button
-                    key={job}
-                    onClick={() => setSelectedJob(job)}
-                    className={`aspect-square rounded-lg border-2 flex items-center justify-center relative group transition-all
-                      ${selectedJob === job ? 'border-emerald-500 bg-emerald-900/20' : 'border-gray-700 hover:border-gray-500 bg-gray-900'}
-                    `}
-                  >
-                    {/* Placeholder for sprite preview */}
-                    <div className="w-8 h-8 bg-gray-700 rounded-sm" />
-                    <span className="absolute bottom-1 text-[8px] text-gray-400 uppercase truncate w-full text-center px-1">
-                      {job.split('_')[0]}
-                    </span>
-                  </button>
-                ))}
+                {availableCharacters.map((char) => {
+                  // Calculate sprite position for preview
+                  const frameX = (char.frameIndex % 16) * 32;
+                  const frameY = Math.floor(char.frameIndex / 16) * 32;
+                  const isSelected = selectedCharacterId === char.id;
+                  
+                  return (
+                    <button
+                      key={char.id}
+                      onClick={() => {
+                        setSelectedCharacterId(char.id);
+                        setSelectedJob(null); // Clear legacy job selection
+                      }}
+                      className={`aspect-square rounded-lg border-2 flex flex-col items-center justify-center relative group transition-all
+                        ${isSelected ? 'border-emerald-500 bg-emerald-900/20' : 'border-gray-700 hover:border-gray-500 bg-gray-900'}
+                      `}
+                      title={char.name}
+                    >
+                      {/* Sprite preview */}
+                      <div 
+                        className="w-8 h-8"
+                        style={{
+                          backgroundImage: `url(${char.spritePath})`,
+                          backgroundPosition: `-${frameX}px -${frameY}px`,
+                          backgroundSize: '512px 512px',
+                          imageRendering: 'pixelated',
+                        }}
+                      />
+                      <span className="absolute bottom-1 text-[8px] text-gray-400 uppercase truncate w-full text-center px-1">
+                        {char.category}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+              {selectedCharacterId && (
+                <p className="text-xs text-emerald-400">
+                  Selected: {getCharacterById(selectedCharacterId).name}
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -189,7 +223,7 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
           </button>
           <button 
             onClick={handleCreate}
-            disabled={!name || (mode === 'catalog' && !selectedJob) || (mode === 'generate' && !generatedImage)}
+            disabled={!name || (mode === 'catalog' && !selectedCharacterId && !selectedJob) || (mode === 'generate' && !generatedImage)}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded font-bold shadow-lg shadow-emerald-900/20 transition-all"
           >
             Create Agent

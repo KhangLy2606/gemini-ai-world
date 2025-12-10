@@ -4,6 +4,7 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '../../types';
 import { SeededRNG } from '../utils/SeededRNG';
+import { AutoTiler } from './AutoTiler';
 
 export interface TerrainTile {
   type: 'grass' | 'path' | 'water' | 'sand';
@@ -26,28 +27,33 @@ export class WorldDecorator {
 
   /**
    * Add shadows under buildings and plants
+   * Enhanced with elliptical/organic shadows for better depth perception
    */
   public addShadows(
     buildings: Array<{ gridX: number; gridY: number; width: number; height: number }>,
     plants: Array<{ gridX: number; gridY: number; width: number; height: number }>
   ): void {
     const shadowColor = 0x000000;
-    const shadowAlpha = 0.15;
+    const shadowAlpha = 0.2;
 
     this.graphics.fillStyle(shadowColor, shadowAlpha);
 
-    // Building shadows (offset to bottom-right)
+    // Building shadows (elliptical, offset to bottom-right)
     buildings.forEach(building => {
-      const x = building.gridX * TILE_SIZE + 2;
-      const y = building.gridY * TILE_SIZE + building.height * TILE_SIZE - 4;
-      this.graphics.fillRect(x, y, building.width * TILE_SIZE - 2, 3);
+      const centerX = (building.gridX + building.width / 2) * TILE_SIZE + 2;
+      const centerY = (building.gridY + building.height) * TILE_SIZE + 3;
+      const radiusX = (building.width * TILE_SIZE) * 0.45;
+      const radiusY = (building.height * TILE_SIZE) * 0.15;
+      this.graphics.fillEllipse(centerX, centerY, radiusX, radiusY);
     });
 
-    // Plant shadows
+    // Plant shadows (smaller ellipses)
     plants.forEach(plant => {
-      const x = plant.gridX * TILE_SIZE + 1;
-      const y = plant.gridY * TILE_SIZE + plant.height * TILE_SIZE - 2;
-      this.graphics.fillRect(x, y, plant.width * TILE_SIZE - 1, 2);
+      const centerX = (plant.gridX + plant.width / 2) * TILE_SIZE;
+      const centerY = (plant.gridY + plant.height) * TILE_SIZE + 2;
+      const radiusX = (plant.width * TILE_SIZE) * 0.4;
+      const radiusY = (plant.height * TILE_SIZE) * 0.12;
+      this.graphics.fillEllipse(centerX, centerY, radiusX, radiusY);
     });
   }
 
@@ -59,34 +65,58 @@ export class WorldDecorator {
     height: number,
     buildingPositions: Array<{ gridX: number; gridY: number; w: number; h: number }>
   ): void {
-    const pathGraphics = this.scene.add.graphics();
-    pathGraphics.setDepth(-20);
+    if (this.scene.textures.exists('path_tileset')) {
+        const pathSpacing = 12;
+        
+        const placePath = (x: number, y: number) => {
+            const sprite = this.scene.add.sprite(x * TILE_SIZE, y * TILE_SIZE, 'path_tileset', 1);
+            sprite.setOrigin(0, 0);
+            sprite.setDepth(-20);
+        };
 
-    // Create paths using simple grid pattern
-    const pathSpacing = 12; // Every 12 tiles
-    const pathColor = 0x8b8b7a;
-    const pathAlpha = 0.4;
+        // Horizontal paths
+        for (let y = pathSpacing; y < height; y += pathSpacing) {
+            for (let x = 0; x < width; x++) {
+                placePath(x, y);
+            }
+        }
 
-    pathGraphics.fillStyle(pathColor, pathAlpha);
+        // Vertical paths
+        for (let x = pathSpacing; x < width; x += pathSpacing) {
+            for (let y = 0; y < height; y++) {
+                placePath(x, y);
+            }
+        }
+    } else {
+        const pathGraphics = this.scene.add.graphics();
+        pathGraphics.setDepth(-20);
 
-    // Horizontal paths
-    for (let y = pathSpacing; y < height; y += pathSpacing) {
-      pathGraphics.fillRect(0, y * TILE_SIZE, width * TILE_SIZE, TILE_SIZE);
-    }
+        // Create paths using simple grid pattern
+        const pathSpacing = 12; // Every 12 tiles
+        const pathColor = 0x8b8b7a;
+        const pathAlpha = 0.4;
 
-    // Vertical paths
-    for (let x = pathSpacing; x < width; x += pathSpacing) {
-      pathGraphics.fillRect(x * TILE_SIZE, 0, TILE_SIZE, height * TILE_SIZE);
-    }
+        pathGraphics.fillStyle(pathColor, pathAlpha);
 
-    // Add crossings at intersections
-    const crossingColor = 0xa9a67e;
-    pathGraphics.fillStyle(crossingColor, pathAlpha * 1.5);
+        // Horizontal paths
+        for (let y = pathSpacing; y < height; y += pathSpacing) {
+          pathGraphics.fillRect(0, y * TILE_SIZE, width * TILE_SIZE, TILE_SIZE);
+        }
 
-    for (let x = pathSpacing; x < width; x += pathSpacing) {
-      for (let y = pathSpacing; y < height; y += pathSpacing) {
-        pathGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      }
+        // Vertical paths
+        for (let x = pathSpacing; x < width; x += pathSpacing) {
+          pathGraphics.fillRect(x * TILE_SIZE, 0, TILE_SIZE, height * TILE_SIZE);
+        }
+
+        // Add crossings at intersections
+        const crossingColor = 0xa9a67e;
+        pathGraphics.fillStyle(crossingColor, pathAlpha * 1.5);
+
+        for (let x = pathSpacing; x < width; x += pathSpacing) {
+          for (let y = pathSpacing; y < height; y += pathSpacing) {
+            pathGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+          }
+        }
     }
   }
 
@@ -94,43 +124,72 @@ export class WorldDecorator {
    * Add water features (ponds, streams)
    */
   public addWaterFeatures(width: number, height: number): void {
-    const waterGraphics = this.scene.add.graphics();
-    waterGraphics.setDepth(-10);
-
-    const waterColor = 0x4db8ff;
-    waterGraphics.fillStyle(waterColor, 0.6);
-
-    // Add scattered ponds
-    const pondCount = Math.floor((width * height) / 200); // ~1 pond per 200 tiles
+    // Generate water grid
+    const waterGrid = new Array(width).fill(0).map(() => new Array(height).fill(false));
+    const pondCount = Math.floor((width * height) / 200);
     const usedPositions = new Set<string>();
 
     for (let i = 0; i < pondCount; i++) {
       let validPosition = false;
-      let px = 0,
-        py = 0;
+      let px = 0, py = 0;
+      let attempts = 0;
 
-      // Find a valid position for pond
-      while (!validPosition && px + 5 < width && py + 5 < height) {
-        px = this.rng.range(0, width - 5);
-        py = this.rng.range(0, height - 5);
-
+      while (!validPosition && attempts < 50) {
+        px = this.rng.range(2, width - 3);
+        py = this.rng.range(2, height - 3);
         const coord = `${px},${py}`;
         if (!usedPositions.has(coord)) {
           validPosition = true;
           usedPositions.add(coord);
         }
+        attempts++;
       }
 
       if (validPosition) {
-        // Draw pond (irregular shape using overlapping circles)
-        const centerX = (px + 2.5) * TILE_SIZE;
-        const centerY = (py + 2.5) * TILE_SIZE;
-        const pondRadius = TILE_SIZE * 2.5;
-
-        waterGraphics.fillCircle(centerX, centerY, pondRadius);
-        waterGraphics.fillCircle(centerX + 10, centerY - 8, pondRadius * 0.7);
-        waterGraphics.fillCircle(centerX - 12, centerY + 8, pondRadius * 0.6);
+        // Mark grid for a pond (irregular shape)
+        const radius = 2;
+        for(let dx = -radius; dx <= radius + 1; dx++) {
+            for(let dy = -radius; dy <= radius + 1; dy++) {
+                if (px + dx >= 0 && px + dx < width && py + dy >= 0 && py + dy < height) {
+                    // Simple circle-ish shape
+                    if (dx*dx + dy*dy <= radius*radius + 1) {
+                        waterGrid[px+dx][py+dy] = true;
+                    }
+                }
+            }
+        }
       }
+    }
+
+    if (this.scene.textures.exists('water_tileset')) {
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                if (waterGrid[x][y]) {
+                    const bitmask = AutoTiler.calculateBitmask(x, y, (nx, ny) => {
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) return false;
+                        return waterGrid[nx][ny];
+                    });
+                    const frame = AutoTiler.getTileIndex(bitmask);
+                    const sprite = this.scene.add.sprite(x * TILE_SIZE, y * TILE_SIZE, 'water_tileset', frame);
+                    sprite.setOrigin(0, 0);
+                    sprite.setDepth(-10);
+                }
+            }
+        }
+    } else {
+        // Fallback
+        const waterGraphics = this.scene.add.graphics();
+        waterGraphics.setDepth(-10);
+        const waterColor = 0x4db8ff;
+        waterGraphics.fillStyle(waterColor, 0.6);
+        
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                if (waterGrid[x][y]) {
+                    waterGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
     }
   }
 
@@ -141,7 +200,7 @@ export class WorldDecorator {
     const atmosphereGraphics = this.scene.add.graphics();
     atmosphereGraphics.setDepth(-99); // Very far back
 
-    // Subtle vignette effect
+    // Subtle vignette effect (reduced intensity for better visibility)
     const centerX = (width * TILE_SIZE) / 2;
     const centerY = (height * TILE_SIZE) / 2;
     const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
@@ -151,9 +210,9 @@ export class WorldDecorator {
         const dx = x * TILE_SIZE - centerX;
         const dy = y * TILE_SIZE - centerY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const darkness = Math.min(1, dist / maxDist * 0.15);
+        const darkness = Math.min(1, dist / maxDist * 0.1); // Reduced from 0.15 to 0.1
 
-        atmosphereGraphics.fillStyle(0x000000, darkness * 0.05);
+        atmosphereGraphics.fillStyle(0x000000, darkness * 0.02); // Reduced from 0.05 to 0.02
         atmosphereGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
     }
@@ -253,6 +312,57 @@ export class WorldDecorator {
     text.setOrigin(0.5);
     text.setScrollFactor(0);
     text.setDepth(1001);
+  }
+
+  /**
+   * Create a dust particle effect at a position
+   * Used for movement feedback or interactions
+   */
+  public createDustParticle(x: number, y: number): void {
+    const particles = this.scene.add.particles(x, y, 'path_tileset', {
+      frame: 0,
+      speed: { min: 20, max: 40 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.3, end: 0 },
+      alpha: { start: 0.6, end: 0 },
+      lifespan: 400,
+      quantity: 3,
+      blendMode: 'ADD'
+    });
+    
+    // Auto-cleanup after emission
+    this.scene.time.delayedCall(500, () => {
+      particles.destroy();
+    });
+  }
+
+  /**
+   * Create an interaction sparkle effect (for conversations/interactions)
+   */
+  public createInteractionEffect(x: number, y: number): void {
+    const graphics = this.scene.add.graphics();
+    graphics.setDepth(1000);
+    
+    // Draw a star/sparkle
+    graphics.fillStyle(0x00ff88, 0.8);
+    const size = 8;
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const px = x + Math.cos(angle) * size;
+      const py = y + Math.sin(angle) * size;
+      graphics.fillCircle(px, py, 2);
+    }
+    
+    // Fade out and destroy
+    this.scene.tweens.add({
+      targets: graphics,
+      alpha: 0,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      duration: 600,
+      ease: 'Quad.easeOut',
+      onComplete: () => graphics.destroy()
+    });
   }
 
   /**

@@ -32,7 +32,7 @@ export const GameView: React.FC<GameViewProps> = ({ onAgentSelect }) => {
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
       pixelArt: true, // Critical for retro/tile look
-      backgroundColor: '#2d2d2d',
+      backgroundColor: '#3a5a3a', // Lighter green-tinted background for better visibility
       physics: {
         default: 'arcade',
         arcade: {

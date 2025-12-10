@@ -5,11 +5,12 @@
 import Phaser from 'phaser';
 import { BuildingObject, PlantObject, TILE_SIZE } from '../../types';
 import { WorldDecorator } from './WorldDecorator';
+import { AutoTiler } from './AutoTiler';
 
 export class EnvironmentRenderer {
   private scene: Phaser.Scene;
-  private buildingsGroup: Map<string, Phaser.GameObjects.Graphics> = new Map();
-  private plantsGroup: Map<string, Phaser.GameObjects.Graphics> = new Map();
+  private buildingsGroup: Map<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics> = new Map();
+  private plantsGroup: Map<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics> = new Map();
   private decorator: WorldDecorator;
 
   constructor(scene: Phaser.Scene, seed: number = 12345) {
@@ -89,117 +90,179 @@ export class EnvironmentRenderer {
     this.decorator.destroy();
   }
 
-  private renderTerrain(width: number, height: number): void {
-    const grassGraphics = this.scene.add.graphics();
-    grassGraphics.setDepth(-100);
+  /**
+   * Add elliptical drop shadow under a sprite for depth ("grounding effect")
+   */
+  private addDropShadow(x: number, y: number, width: number, height: number): void {
+    const shadowGraphics = this.scene.add.graphics();
+    shadowGraphics.setDepth(-5); // Just above terrain
     
-    for (let x = 0; x < width; x++) {
-        for (let y = 0; y < height; y++) {
-            const wx = x * TILE_SIZE;
-            const wy = y * TILE_SIZE;
-            const color = (x + y) % 2 === 0 ? 0x2d5a27 : 0x35682d;
-            grassGraphics.fillStyle(color, 1);
-            grassGraphics.fillRect(wx, wy, TILE_SIZE, TILE_SIZE);
+    // Draw elliptical shadow
+    const shadowCenterX = x + (width / 2);
+    const shadowCenterY = y + height + 4; // Offset below object
+    const shadowRadiusX = width * 0.4;
+    const shadowRadiusY = height * 0.15;
+    
+    shadowGraphics.fillStyle(0x000000, 0.3);
+    shadowGraphics.fillEllipse(shadowCenterX, shadowCenterY, shadowRadiusX, shadowRadiusY);
+  }
+
+  private renderTerrain(width: number, height: number): void {
+    // Create tilemap
+    const map = this.scene.make.tilemap({ 
+      tileWidth: 32, 
+      tileHeight: 32, 
+      width: width, 
+      height: height 
+    });
+    const tileset = map.addTilesetImage('grass_tileset', 'grass_tileset', 32, 32);
+    
+    if (tileset) {
+        const layer = map.createBlankLayer('terrain', tileset, 0, 0, width, height);
+        if (layer) {
+            // Use AutoTiler for grass
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+                    // Check if neighbor is within bounds (valid grass)
+                    // Currently assuming entire map is grass base
+                    const isGrass = (nx: number, ny: number) => {
+                        return nx >= 0 && nx < width && ny >= 0 && ny < height;
+                    };
+                    
+                    const bitmask = AutoTiler.calculateBitmask(x, y, isGrass);
+                    const tileIndex = AutoTiler.getTileIndex(bitmask);
+                    layer.putTileAt(tileIndex, x, y);
+                }
+            }
+            layer.setDepth(-100);
+        }
+    } else {
+        // Fallback if tileset failed to load
+        const grassGraphics = this.scene.add.graphics();
+        grassGraphics.setDepth(-100);
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+                const wx = x * TILE_SIZE;
+                const wy = y * TILE_SIZE;
+                const color = (x + y) % 2 === 0 ? 0x2d5a27 : 0x35682d;
+                grassGraphics.fillStyle(color, 1);
+                grassGraphics.fillRect(wx, wy, TILE_SIZE, TILE_SIZE);
+            }
         }
     }
   }
 
   private renderBuilding(building: BuildingObject): void {
-    const graphics = this.scene.add.graphics();
     const x = building.gridX * TILE_SIZE;
     const y = building.gridY * TILE_SIZE;
-    const width = building.width * TILE_SIZE;
-    const height = building.height * TILE_SIZE;
+    
+    // Determine frame based on building type
+    let frameIndex = 0;
+    if (building.buildingType.includes('TECH')) frameIndex = 0;
+    else if (building.buildingType.includes('HOSPITAL')) frameIndex = 1;
+    else if (building.buildingType.includes('CAFE')) frameIndex = 2;
+    else if (building.buildingType.includes('LIBRARY')) frameIndex = 3;
+    else if (building.buildingType.includes('LAB')) frameIndex = 4;
+    
+    // Check if texture exists
+    if (this.scene.textures.exists('buildings_atlas')) {
+        // Add drop shadow for depth
+        this.addDropShadow(x, y, building.width * TILE_SIZE, building.height * TILE_SIZE);
+        
+        const sprite = this.scene.add.sprite(x, y, 'buildings_atlas', frameIndex);
+        sprite.setOrigin(0, 0);
+        sprite.setDisplaySize(building.width * TILE_SIZE, building.height * TILE_SIZE);
+        sprite.setDepth(y + building.height * TILE_SIZE);
+        this.buildingsGroup.set(building.id, sprite);
+    } else {
+        // Fallback to graphics
+        const graphics = this.scene.add.graphics();
+        const width = building.width * TILE_SIZE;
+        const height = building.height * TILE_SIZE;
 
-    // Main building body
-    graphics.fillStyle(building.color, 1);
-    graphics.fillRect(x, y, width, height);
+        // Drop shadow
+        this.addDropShadow(x, y, width, height);
+        
+        // Main building body
+        graphics.fillStyle(building.color, 1);
+        graphics.fillRect(x, y, width, height);
 
-    // Building outline
-    graphics.lineStyle(2, 0x000000, 0.3);
-    graphics.strokeRect(x, y, width, height);
+        // Building outline
+        graphics.lineStyle(2, 0x000000, 0.3);
+        graphics.strokeRect(x, y, width, height);
 
-    // Roof (secondary color)
-    if (building.secondaryColor) {
-      graphics.fillStyle(building.secondaryColor, 0.8);
-      graphics.fillRect(x + 2, y + 2, width - 4, Math.ceil(height * 0.3));
-    }
-
-    // Windows (for large buildings)
-    if (width >= 64 && height >= 64) {
-      graphics.fillStyle(0xffeb3b, 0.6); // Yellow windows
-      const windowSize = 8;
-      const windowPadding = 12;
-      
-      for (let wx = x + windowPadding; wx < x + width - windowPadding; wx += windowSize + windowPadding) {
-        for (let wy = y + windowPadding + 12; wy < y + height - windowPadding; wy += windowSize + windowPadding) {
-          graphics.fillRect(wx, wy, windowSize, windowSize);
+        // Roof (secondary color)
+        if (building.secondaryColor) {
+          graphics.fillStyle(building.secondaryColor, 0.8);
+          graphics.fillRect(x + 2, y + 2, width - 4, Math.ceil(height * 0.3));
         }
-      }
+        
+        // Add windows for large buildings (visual interest)
+        if (width >= 64 && height >= 64) {
+          graphics.fillStyle(0xffeb3b, 0.6);
+          const windowSize = 8;
+          const windowPadding = 12;
+          
+          for (let wx = x + windowPadding; wx < x + width - windowPadding; wx += windowSize + windowPadding) {
+            for (let wy = y + windowPadding + 12; wy < y + height - windowPadding; wy += windowSize + windowPadding) {
+              graphics.fillRect(wx, wy, windowSize, windowSize);
+            }
+          }
+        }
+        
+        graphics.setDepth(y + height);
+        this.buildingsGroup.set(building.id, graphics);
     }
-
-    // Depth sorting: buildings are lower than plants
-    graphics.setDepth(y + height);
-    this.buildingsGroup.set(building.id, graphics);
   }
 
   private renderPlant(plant: PlantObject): void {
-    const graphics = this.scene.add.graphics();
     const x = plant.gridX * TILE_SIZE;
     const y = plant.gridY * TILE_SIZE;
-    const width = plant.width * TILE_SIZE;
-    const height = plant.height * TILE_SIZE;
-
-    // Draw plant based on type
-    graphics.fillStyle(plant.color, 0.8);
-
-    if (plant.plantType.includes('TREE')) {
-      const trunkWidth = Math.max(4, width * 0.3);
-      graphics.fillRect(x + (width - trunkWidth) / 2, y + height * 0.6, trunkWidth, height * 0.4);
-      if (plant.secondaryColor) graphics.fillStyle(plant.secondaryColor, 0.9);
-      graphics.fillCircle(x + width / 2, y + height * 0.5, width / 2);
-      
-    } else if (plant.plantType.includes('BUSH')) {
-      graphics.fillCircle(x + width / 4, y + height * 0.6, width * 0.35);
-      graphics.fillCircle(x + (width * 0.75), y + height * 0.6, width * 0.35);
-      graphics.fillCircle(x + width / 2, y + height * 0.3, width * 0.4);
-
-    } else if (plant.plantType.includes('FLOWER')) {
-      const petalCount = 5;
-      const petalRadius = width * 0.25;
-      const centerX = x + width / 2;
-      const centerY = y + height / 2;
-
-      for (let i = 0; i < petalCount; i++) {
-        const angle = (i / petalCount) * Math.PI * 2;
-        const px = centerX + Math.cos(angle) * petalRadius;
-        const py = centerY + Math.sin(angle) * petalRadius;
-        graphics.fillCircle(px, py, width * 0.15);
-      }
-      if (plant.secondaryColor) graphics.fillStyle(plant.secondaryColor, 0.9);
-      graphics.fillCircle(centerX, centerY, width * 0.1);
-
-    } else if (plant.plantType.includes('HEDGE')) {
-      graphics.fillRect(x, y + height * 0.4, width, height * 0.6);
-      if (plant.secondaryColor) graphics.fillStyle(plant.secondaryColor, 0.9);
-      const bumpSize = Math.min(6, width / 4);
-      for (let bx = x; bx < x + width; bx += bumpSize) {
-        graphics.fillCircle(bx, y + height * 0.35, bumpSize / 2);
-      }
-
-    } else if (plant.plantType.includes('BAMBOO')) {
-      graphics.lineStyle(2, plant.color, 1);
-      graphics.strokeRect(x + width * 0.3, y, width * 0.4, height);
-      const segments = Math.floor(height / 8);
-      for (let i = 0; i < segments; i++) {
-        graphics.strokeLineCosmetic(x + width * 0.25, y + (i * 8), x + width * 0.75, y + (i * 8));
-      }
-
+    
+    let frameIndex = 0;
+    if (plant.plantType.includes('TREE')) frameIndex = 0;
+    else if (plant.plantType.includes('BUSH')) frameIndex = 1;
+    else if (plant.plantType.includes('FLOWER')) frameIndex = 2;
+    else frameIndex = 3; // Prop
+    
+    if (this.scene.textures.exists('plants_props_atlas')) {
+        // Add drop shadow for depth
+        this.addDropShadow(x, y, plant.width * TILE_SIZE, plant.height * TILE_SIZE);
+        
+        const sprite = this.scene.add.sprite(x, y, 'plants_props_atlas', frameIndex);
+        sprite.setOrigin(0, 0);
+        sprite.setDisplaySize(plant.width * TILE_SIZE, plant.height * TILE_SIZE);
+        sprite.setDepth(y + plant.height * TILE_SIZE);
+        this.plantsGroup.set(plant.id, sprite);
     } else {
-      graphics.fillRect(x, y, width, height);
-    }
+        // Fallback
+        const graphics = this.scene.add.graphics();
+        const width = plant.width * TILE_SIZE;
+        const height = plant.height * TILE_SIZE;
+        
+        // Drop shadow
+        this.addDropShadow(x, y, width, height);
 
-    graphics.setDepth(y + height);
-    this.plantsGroup.set(plant.id, graphics);
+        // Draw plant based on type
+        graphics.fillStyle(plant.color, 0.8);
+
+        if (plant.plantType.includes('TREE')) {
+          const trunkWidth = Math.max(4, width * 0.3);
+          graphics.fillRect(x + (width - trunkWidth) / 2, y + height * 0.6, trunkWidth, height * 0.4);
+          if (plant.secondaryColor) graphics.fillStyle(plant.secondaryColor, 0.9);
+          graphics.fillCircle(x + width / 2, y + height * 0.5, width / 2);
+          
+        } else if (plant.plantType.includes('BUSH')) {
+          graphics.fillCircle(x + width / 4, y + height * 0.6, width * 0.35);
+          graphics.fillCircle(x + (width * 0.75), y + height * 0.6, width * 0.35);
+          graphics.fillCircle(x + width / 2, y + height * 0.3, width * 0.4);
+
+        } else {
+          graphics.fillRect(x, y, width, height);
+        }
+
+        graphics.setDepth(y + height);
+        this.plantsGroup.set(plant.id, graphics);
+    }
   }
 }
