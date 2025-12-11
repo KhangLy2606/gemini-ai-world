@@ -1,3 +1,4 @@
+
 import { EnvironmentManager } from './EnvironmentManager';
 
 export class CollisionManager {

@@ -1,3 +1,4 @@
+
 import DOMPurify from 'dompurify';
 
 export function sanitizeMessage(text: string): string {

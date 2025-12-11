@@ -1,66 +1,126 @@
 
-import { JobRole, JOB_SKINS } from '../config/JobRegistry';
+import { GoogleGenAI } from "@google/genai";
 
-// Mock service to simulate image generation
-// In a real app, this would call the backend which interfaces with Gemini 3 Pro Image
+declare var process: any;
 
 export class ImageGenerationService {
   
+  private static getClient() {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      console.error("API Key missing. Make sure GEMINI_API_KEY is set in .env.local");
+      throw new Error("API Key not found");
+    }
+    return new GoogleGenAI({ apiKey });
+  }
+
   /**
-   * Simulate generating a character sprite from a text prompt
-   * Returns a data URL or image URL
+   * Generate a character sprite from a text prompt using Gemini 2.5 Flash Image
    */
   static async generateCharacterSprite(prompt: string): Promise<string> {
     console.log(`Generating sprite for prompt: "${prompt}"...`);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const ai = this.getClient();
+    // Enforce pixel art constraints in the prompt
+    const enhancedPrompt = `A single 32x32 pixel art character sprite of ${prompt}. \n\nStyle: Flat 2D Pixel Art, SNES style, white background, full body facing forward, no shadows. The image must be exactly square.`;
 
-    // For the mock, we'll return a random existing sprite from our assets
-    // In reality, this would return the URL of the generated image from the backend
-    // Since we can't easily generate a real pixel art image in the browser without the API,
-    // we will use a placeholder approach.
-    
-    // However, to make it feel "real" in the UI, we can return a placeholder 
-    // or just pick a random job skin index to use if we were creating a real agent.
-    // But the UI expects an image URL to display.
-    
-    // Let's return a placeholder colored square as a data URL for now, 
-    // or if we can, use a generic placeholder.
-    
-    return this.createPlaceholderImage(prompt);
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [{ text: enhancedPrompt }]
+        }
+      });
+
+      return this.extractImage(response);
+    } catch (error) {
+      console.error("Generation failed:", error);
+      throw error;
+    }
   }
 
-  private static createPlaceholderImage(seed: string): string {
-    const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
-    const ctx = canvas.getContext('2d');
+  /**
+   * Generate a high-quality asset using Gemini 3 Pro Image (Nano Banana Pro)
+   */
+  static async generateHighQualityAsset(prompt: string, size: '1K' | '2K' | '4K'): Promise<string> {
+    console.log(`Generating HQ asset (${size}) for prompt: "${prompt}"...`);
     
-    if (ctx) {
-      // Generate a deterministic color based on the prompt
-      let hash = 0;
-      for (let i = 0; i < seed.length; i++) {
-        hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-      const color = '#' + '00000'.substring(0, 6 - c.length) + c;
+    // Create a new instance every call to ensure the latest API key is used
+    // This is critical if the key was just selected via the UI dialog
+    const ai = this.getClient();
+    
+    const enhancedPrompt = `Pixel art game asset: ${prompt}. \n\nStyle: Flat 2D Pixel Art, SNES style, high quality, white background.`;
 
-      ctx.fillStyle = color;
-      ctx.fillRect(0, 0, 32, 32);
-      
-      // Add some "pixel art" noise
-      for(let i=0; i<16; i++) {
-          ctx.fillStyle = 'rgba(255,255,255,0.2)';
-          ctx.fillRect(Math.random() * 32, Math.random() * 32, 4, 4);
-      }
-      
-      // Eyes
-      ctx.fillStyle = 'black';
-      ctx.fillRect(8, 10, 4, 4);
-      ctx.fillRect(20, 10, 4, 4);
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: {
+            parts: [{ text: enhancedPrompt }]
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "1:1",
+            imageSize: size
+          }
+        }
+      });
+
+      return this.extractImage(response);
+    } catch (error) {
+      console.error("HQ Generation failed:", error);
+      throw error;
     }
+  }
+
+  /**
+   * Edit an existing character sprite using Gemini 2.5 Flash Image
+   */
+  static async editCharacterSprite(imageBase64: string, prompt: string): Promise<string> {
+    console.log(`Editing sprite with prompt: "${prompt}"...`);
     
-    return canvas.toDataURL();
+    const ai = this.getClient();
+    
+    // Ensure base64 string is clean (remove data:image/png;base64, prefix if present for the API call)
+    // The API expects raw base64 data in the inlineData field.
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const mimeType = 'image/png'; // Assuming PNG for sprites
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType
+              }
+            },
+            { 
+              text: `Edit this pixel art character: ${prompt}. Maintain 32x32 pixel art style, white background, and identical perspective.` 
+            }
+          ]
+        }
+      });
+
+      return this.extractImage(response);
+    } catch (error) {
+      console.error("Editing failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to extract the base64 image from the Gemini response
+   */
+  private static extractImage(response: any): string {
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+    throw new Error("No image generated in response");
   }
 }

@@ -14,7 +14,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { Buffer } from 'buffer';
+
+declare var Buffer: any;
+declare var process: any;
+declare var __dirname: string;
 
 // Simple PNG dimension checker (reads PNG header)
 function getPngDimensions(buffer: any): { width: number; height: number } | null {
@@ -48,7 +51,7 @@ interface IngestOptions {
 }
 
 function parseArgs(): IngestOptions | null {
-  const args = (process as any).argv.slice(2);
+  const args = process.argv.slice(2);
   const options: Partial<IngestOptions> = {};
 
   for (let i = 0; i < args.length; i++) {
@@ -93,7 +96,7 @@ Example:
 async function main() {
   const options = parseArgs();
   if (!options) {
-    (process as any).exit(1);
+    process.exit(1);
   }
 
   console.log('🎮 Character Ingestion Tool');
@@ -109,14 +112,14 @@ async function main() {
   if (!validCategories.includes(options.category)) {
     console.error(`❌ Error: Invalid category "${options.category}"`);
     console.error(`   Valid categories: ${validCategories.join(', ')}`);
-    (process as any).exit(1);
+    process.exit(1);
   }
 
   // Check if file exists
   const sourcePath = path.resolve(options.file);
   if (!fs.existsSync(sourcePath)) {
     console.error(`❌ Error: File not found: ${sourcePath}`);
-    (process as any).exit(1);
+    process.exit(1);
   }
 
   // Read and validate PNG
@@ -125,7 +128,7 @@ async function main() {
 
   if (!dimensions) {
     console.error('❌ Error: File is not a valid PNG image');
-    (process as any).exit(1);
+    process.exit(1);
   }
 
   console.log(`📐 Image dimensions: ${dimensions.width}x${dimensions.height}px`);
@@ -133,13 +136,13 @@ async function main() {
   if (dimensions.width !== 32 || dimensions.height !== 32) {
     console.error(`❌ Error: Image must be exactly 32x32 pixels`);
     console.error(`   Got: ${dimensions.width}x${dimensions.height}px`);
-    (process as any).exit(1);
+    process.exit(1);
   }
 
   console.log('✅ Image validation passed');
 
   // Create target directory
-  const projectRoot = (process as any).cwd();
+  const projectRoot = path.resolve(__dirname, '..');
   const customAssetsDir = path.join(projectRoot, 'public', 'assets', 'custom');
   
   if (!fs.existsSync(customAssetsDir)) {
@@ -189,5 +192,5 @@ async function main() {
 
 main().catch(err => {
   console.error('Fatal error:', err);
-  (process as any).exit(1);
+  process.exit(1);
 });

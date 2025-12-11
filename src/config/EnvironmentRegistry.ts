@@ -1,3 +1,4 @@
+
 // Environment Objects Registry
 // Defines buildings, plants, and infrastructure for world enrichment
 

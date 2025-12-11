@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "ingest:character": "tsx tools/ingest-character.ts"
+    "ingest:character": "tsx tools/ingest-character.ts",
+    "generate:assets": "tsx tools/generate-assets.ts"
   },
   "dependencies": {
+    "@google/genai": "^0.1.2",
     "@types/dompurify": "^3.0.5",
     "dompurify": "^3.3.1",
     "phaser": "^3.90.0",

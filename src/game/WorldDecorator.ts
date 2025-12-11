@@ -1,3 +1,4 @@
+
 // World Decoration System
 // Adds visual enhancements like shadows, paths, water, and decorative elements
 

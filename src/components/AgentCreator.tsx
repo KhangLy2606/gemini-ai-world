@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { JobRole, JOB_SKINS } from '../config/JobRegistry';
-import { CHARACTER_REGISTRY, getCharacterById, CharacterDefinition } from '../config/CharacterRegistry';
+import React, { useState, useRef } from 'react';
+import { JobRole } from '../config/JobRegistry';
+import { CHARACTER_REGISTRY, getCharacterById } from '../config/CharacterRegistry';
 import { ImageGenerationService } from '../services/ImageGenerationService';
 import { AgentData } from '../../types';
 
@@ -17,10 +17,16 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
   const [selectedJob, setSelectedJob] = useState<JobRole | null>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   
-  // Generation State
+  // Generation & Editing State
   const [prompt, setPrompt] = useState('');
+  const [editPrompt, setEditPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+
+  // Model Options
+  const [generationModel, setGenerationModel] = useState<'flash' | 'pro'>('flash');
+  const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
 
   // Get all available characters from registry
   const availableCharacters = Object.values(CHARACTER_REGISTRY);
@@ -32,24 +38,26 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
       name,
       bio: bio || 'A newly created digital entity.',
       state: 'idle',
-      gridX: Math.floor(Math.random() * 20) + 10, // Random spawn near center
+      gridX: Math.floor(Math.random() * 20) + 10,
       gridY: Math.floor(Math.random() * 15) + 5,
     };
 
     if (mode === 'catalog') {
-      // Use selected character from registry or fall back to job
       if (selectedCharacterId) {
         const character = getCharacterById(selectedCharacterId);
         newAgent.spriteKey = character.id;
-        newAgent.job = character.id; // Use character ID as job for backward compatibility
+        newAgent.job = character.id; 
       } else if (selectedJob) {
         newAgent.job = selectedJob;
       }
     } else if (mode === 'generate' && generatedImage) {
-      // For generated agents, assign a custom character key
-      // In production, this would integrate with the ingestion tool
-      newAgent.job = 'TECH_DEV_MALE' as JobRole; // Fallback until custom texture is loaded
-      // TODO: When ingestion pipeline is ready, set newAgent.spriteKey to the generated character ID
+      newAgent.job = 'TECH_DEV_MALE' as JobRole;
+      newAgent.spriteKey = `gen_${Date.now()}`; // Unique key
+      // In a real app, we would upload this image to the backend/ingestion
+      // For this MVP, we pass the data URL, and MainScene would need to handle loading it
+      // Since MainScene handles textures via keys, we might need a mechanism to add texture at runtime.
+      // We'll dispatch a special event for the texture data in MainScene.
+      (newAgent as any).textureData = generatedImage;
     }
 
     onCreate(newAgent);
@@ -60,13 +68,85 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
     if (!prompt) return;
     setIsGenerating(true);
     try {
-      const imageUrl = await ImageGenerationService.generateCharacterSprite(prompt);
+      let imageUrl;
+      if (generationModel === 'pro') {
+        imageUrl = await ImageGenerationService.generateHighQualityAsset(prompt, imageSize);
+      } else {
+        imageUrl = await ImageGenerationService.generateCharacterSprite(prompt);
+      }
       setGeneratedImage(imageUrl);
+      setMode('generate'); // Switch to generate mode to show result
+      setSelectedCharacterId(null); // Clear catalog selection
     } catch (error) {
       console.error("Generation failed", error);
+      alert("Failed to generate image. Check API key and logs.");
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleEdit = async () => {
+    if (!editPrompt) return;
+    
+    // Determine source image
+    let sourceImageBase64 = generatedImage;
+
+    // If editing a catalog image, we need to extract it from the atlas first
+    if (mode === 'catalog' && selectedCharacterId) {
+      try {
+        sourceImageBase64 = await extractCharacterFromAtlas(selectedCharacterId);
+      } catch (e) {
+        console.error("Failed to extract atlas image", e);
+        return;
+      }
+    }
+
+    if (!sourceImageBase64) return;
+
+    setIsEditing(true);
+    try {
+      const newImageUrl = await ImageGenerationService.editCharacterSprite(sourceImageBase64, editPrompt);
+      setGeneratedImage(newImageUrl);
+      
+      // Switch UI to "Generate" mode since we now have a custom image
+      setMode('generate');
+      setSelectedCharacterId(null);
+      setEditPrompt('');
+    } catch (error) {
+      console.error("Editing failed", error);
+      alert("Failed to edit image.");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
+  // Helper to draw the specific frame from the atlas onto a canvas and get base64
+  const extractCharacterFromAtlas = (charId: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const char = getCharacterById(charId);
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = char.spritePath;
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject('Canvas context failed');
+          return;
+        }
+
+        const frameX = (char.frameIndex % 16) * 32;
+        const frameY = Math.floor(char.frameIndex / 16) * 32;
+        
+        ctx.drawImage(img, frameX, frameY, 32, 32, 0, 0, 32, 32);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      
+      img.onerror = (err) => reject(err);
+    });
   };
 
   return (
@@ -122,13 +202,12 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
             </div>
           </div>
 
-          {/* Mode Specific Content */}
-          {mode === 'catalog' ? (
+          {/* Catalog Mode */}
+          {mode === 'catalog' && (
             <div className="space-y-3">
               <label className="text-xs font-bold text-gray-500 uppercase">Select Character</label>
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-60 overflow-y-auto p-2 bg-gray-950 rounded border border-gray-800">
                 {availableCharacters.map((char) => {
-                  // Calculate sprite position for preview
                   const frameX = (char.frameIndex % 16) * 32;
                   const frameY = Math.floor(char.frameIndex / 16) * 32;
                   const isSelected = selectedCharacterId === char.id;
@@ -138,16 +217,16 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                       key={char.id}
                       onClick={() => {
                         setSelectedCharacterId(char.id);
-                        setSelectedJob(null); // Clear legacy job selection
+                        setSelectedJob(null);
+                        setGeneratedImage(null); // Clear any generated image when picking from catalog
                       }}
                       className={`aspect-square rounded-lg border-2 flex flex-col items-center justify-center relative group transition-all
                         ${isSelected ? 'border-emerald-500 bg-emerald-900/20' : 'border-gray-700 hover:border-gray-500 bg-gray-900'}
                       `}
                       title={char.name}
                     >
-                      {/* Sprite preview */}
                       <div 
-                        className="w-8 h-8"
+                        className="w-8 h-8 transform scale-150"
                         style={{
                           backgroundImage: `url(${char.spritePath})`,
                           backgroundPosition: `-${frameX}px -${frameY}px`,
@@ -155,9 +234,6 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                           imageRendering: 'pixelated',
                         }}
                       />
-                      <span className="absolute bottom-1 text-[8px] text-gray-400 uppercase truncate w-full text-center px-1">
-                        {char.category}
-                      </span>
                     </button>
                   );
                 })}
@@ -168,8 +244,41 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                 </p>
               )}
             </div>
-          ) : (
+          )}
+
+          {/* Generate Mode */}
+          {mode === 'generate' && (
             <div className="space-y-4">
+              
+              {/* Model & Size Selector */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Model</label>
+                  <select 
+                    value={generationModel}
+                    onChange={(e) => setGenerationModel(e.target.value as 'flash' | 'pro')}
+                    className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-white text-sm focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="flash">Gemini 2.5 Flash (Fast)</option>
+                    <option value="pro">Gemini 3 Pro (High Quality)</option>
+                  </select>
+                </div>
+                {generationModel === 'pro' && (
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Image Size</label>
+                    <select 
+                      value={imageSize}
+                      onChange={(e) => setImageSize(e.target.value as '1K' | '2K' | '4K')}
+                      className="w-full bg-gray-950 border border-gray-700 rounded p-2 text-white text-sm focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="1K">1K (1024x1024)</option>
+                      <option value="2K">2K (2048x2048)</option>
+                      <option value="4K">4K (4096x4096)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs font-bold text-purple-400 uppercase">AI Generation Prompt</label>
                 <div className="flex gap-2">
@@ -188,12 +297,11 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                     {isGenerating ? 'Generating...' : 'Generate'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500">Powered by Gemini 3 Pro Image (Nano Banana Pro)</p>
               </div>
 
               {/* Preview Area */}
               <div className="flex justify-center">
-                <div className="w-32 h-32 bg-gray-950 border border-gray-700 rounded-lg flex items-center justify-center overflow-hidden relative">
+                <div className="w-32 h-32 bg-gray-950 border border-gray-700 rounded-lg flex items-center justify-center overflow-hidden relative shadow-inner">
                   {generatedImage ? (
                     <img src={generatedImage} alt="Generated Agent" className="w-full h-full object-contain pixelated" />
                   ) : (
@@ -207,6 +315,31 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Editor - Available in both modes if an image is selected/generated */}
+          {(generatedImage || (mode === 'catalog' && selectedCharacterId)) && (
+            <div className="space-y-2 pt-4 border-t border-gray-800">
+              <label className="text-xs font-bold text-blue-400 uppercase flex items-center gap-2">
+                AI Magic Editor <span className="text-[10px] bg-blue-900/50 px-1 rounded text-blue-300 font-normal">Gemini 2.5 Flash</span>
+              </label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={editPrompt}
+                  onChange={(e) => setEditPrompt(e.target.value)}
+                  placeholder={mode === 'catalog' ? "Edit selected character (e.g. 'Add a red hat')" : "Refine this image (e.g. 'Remove background')"}
+                  className="flex-1 bg-gray-950 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none text-sm"
+                />
+                <button 
+                  onClick={handleEdit}
+                  disabled={isEditing || !editPrompt}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded font-medium transition-colors text-sm"
+                >
+                  {isEditing ? 'Editing...' : 'Edit'}
+                </button>
               </div>
             </div>
           )}

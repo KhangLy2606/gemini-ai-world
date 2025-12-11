@@ -1,3 +1,4 @@
+
 // Environment Manager for Procedural World Generation
 // Handles placement and rendering of buildings, plants, and infrastructure
 

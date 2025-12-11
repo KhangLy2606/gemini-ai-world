@@ -1,3 +1,4 @@
+
 /**
  * Job Registry - Legacy Compatibility Layer
  * 
@@ -55,4 +56,3 @@ export const JOB_TO_CHARACTER_ID: Record<JobRole, string> = {
   CREATIVE_ARTIST: 'CREATIVE_ARTIST',
   CREATIVE_MUSICIAN: 'CREATIVE_MUSICIAN',
 };
-

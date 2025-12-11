@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameView } from './components/GameView';
 import { AgentCreator } from './src/components/AgentCreator';
 import { AgentData, ConversationStreamEventDetail, PartialMessage } from './types';
@@ -10,10 +9,67 @@ const App: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isCreatorOpen, setCreatorOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
   
   // Streaming state
   const [partialMessage, setPartialMessage] = useState<PartialMessage | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    const checkApiKey = async () => {
+      // If we are in the AI Studio environment, we must ensure a key is selected
+      const aistudio = (window as any).aistudio;
+      if (aistudio) {
+        try {
+          const hasKey = await aistudio.hasSelectedApiKey();
+          setHasApiKey(hasKey);
+        } catch (e) {
+          console.error("Error checking API key selection", e);
+          setHasApiKey(false);
+        }
+      } else {
+        // Local development or standalone mode: check env var presence implicitly
+        // We assume local dev has configured .env.local correctly if not in AI Studio
+        setHasApiKey(true);
+      }
+    };
+    checkApiKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    const aistudio = (window as any).aistudio;
+    if (aistudio) {
+      try {
+        await aistudio.openSelectKey();
+        // Assuming success if the dialog returns (or we could re-check)
+        setHasApiKey(true);
+      } catch (e) {
+        console.error("Error selecting API key", e);
+      }
+    }
+  };
+
+  if (!hasApiKey && (window as any).aistudio) {
+    return (
+      <div className="flex h-screen w-screen bg-gray-950 items-center justify-center text-white">
+        <div className="bg-gray-900 p-8 rounded-xl border border-gray-800 shadow-2xl max-w-md text-center">
+          <h1 className="text-2xl font-bold mb-4 text-emerald-400">API Key Required</h1>
+          <p className="text-gray-400 mb-6">
+            To use the Gemini 3 Pro features (High-Fidelity Image Generation), please select a paid API key.
+          </p>
+          <button 
+            onClick={handleSelectKey}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-lg font-bold transition-all"
+          >
+            Select API Key
+          </button>
+          <p className="text-xs text-gray-600 mt-4">
+            See <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">Billing Documentation</a> for details.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Callback passed to Phaser logic
   const handleAgentSelect = (agent: AgentData) => {
@@ -22,28 +78,13 @@ const App: React.FC = () => {
   };
 
   const handleCreateAgent = (newAgent: Partial<AgentData>) => {
-    // In a real app, we would send this to the backend via Socket.io or REST API
-    // For now, we'll just log it. The GameView/MainScene needs a way to receive this.
-    // Since GameView is a wrapper around Phaser, we might need to expose a method or use a context/event bus.
-    // However, for this demo, we can just log it and maybe emit a socket event if the socket was accessible here.
     console.log("Creating new agent:", newAgent);
-    
-    // Ideally, we emit to the socket here if we had access to it.
-    // Since the socket is inside MainScene, we can't easily reach it from here without lifting state up or using a global socket.
-    // But we can simulate it by dispatching a custom event that MainScene listens to, or just assume the backend handles it.
-    
     const event = new CustomEvent('create-agent', { detail: newAgent });
     window.dispatchEvent(event);
   };
 
   const handleConversationUpdate = (detail: ConversationStreamEventDetail) => {
-      // Only update if relevant to the selected agent
       if (!selectedAgent) return;
-      
-      // Check if this update belongs to the current conversation
-      // We assume conversationId contains agentId or we check if the sender is the selected agent or their partner
-      // For simplicity, we'll just update if we have a selected Agent, 
-      // but in production consider checking detail.conversationId equality
       
       if (detail.status === 'typing') {
           setIsTyping(true);
@@ -66,24 +107,20 @@ const App: React.FC = () => {
     let character;
     
     if (agent.spriteKey) {
-      // Use spriteKey if available (custom characters)
       character = getCharacterById(agent.spriteKey);
     } else if (agent.job) {
-      // Fall back to job-based lookup
       character = getCharacterByJob(agent.job);
     } else {
-      // Default fallback
       character = getCharacterById('TECH_DEV_MALE');
     }
     
-    // Calculate sprite position from frame index
     const frameX = (character.frameIndex % 16) * 32;
     const frameY = Math.floor(character.frameIndex / 16) * 32;
-    
-    // We want to display it at 2.5x scale (32px -> 80px)
     const scale = 2.5;
     const sheetSize = 512;
     
+    // In a real app with missing assets, we might want to check if image loads.
+    // For now, we fallback to a background color if image isn't found.
     return {
         backgroundImage: `url(${character.spritePath})`,
         backgroundPosition: `-${frameX * scale}px -${frameY * scale}px`,
@@ -91,7 +128,7 @@ const App: React.FC = () => {
         width: '100%',
         height: '100%',
         imageRendering: 'pixelated' as const,
-        backgroundColor: '#222'
+        backgroundColor: '#1a202c', // Fallback color
     };
   };
 
@@ -165,7 +202,12 @@ const App: React.FC = () => {
                                 className="w-20 h-20 rounded-xl border border-gray-600 bg-gray-800 flex items-center justify-center text-3xl shadow-inner overflow-hidden"
                             >
                                 {/* Render the sprite frame here */}
-                                <div style={getAvatarStyle(selectedAgent)} />
+                                <div style={getAvatarStyle(selectedAgent)}>
+                                    {/* Text fallback if background image fails visually */}
+                                    <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs font-mono opacity-50 hover:opacity-100">
+                                        NO IMG
+                                    </div>
+                                </div>
                             </div>
                             <div className="absolute -bottom-2 -right-2 bg-gray-800 text-xs px-2 py-0.5 rounded border border-gray-600 font-mono">
                                 ID:{selectedAgent.characterId ?? 0}
@@ -228,8 +270,6 @@ const App: React.FC = () => {
                                     <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
                                 </>
                             ) : (
-                                // Logic for empty history...
-                                // We'll handle empty state below if no partial message
                                 <></>
                             )}
 

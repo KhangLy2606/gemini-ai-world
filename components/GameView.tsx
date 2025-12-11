@@ -28,12 +28,16 @@ export const GameView: React.FC<GameViewProps> = ({ onAgentSelect, onConversatio
         return; 
     }
 
+    // Ensure valid dimensions to prevent "Framebuffer status: Incomplete Attachment"
+    const width = containerRef.current.clientWidth || window.innerWidth || 1024;
+    const height = containerRef.current.clientHeight || window.innerHeight || 768;
+
     // 2. Phaser Configuration
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
       parent: containerRef.current,
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+      width: width,
+      height: height,
       pixelArt: true, // Critical for retro/tile look
       backgroundColor: '#3a5a3a', // Lighter green-tinted background for better visibility
       physics: {
@@ -42,27 +46,28 @@ export const GameView: React.FC<GameViewProps> = ({ onAgentSelect, onConversatio
           gravity: { y: 0, x: 0 }, // Top-down, no gravity
         },
       },
-      scene: [MainScene], // Load our scene
+      scene: [], // Initialize with empty scene list to prevent auto-start race conditions
     };
 
     // 3. Initialize Game
     const game = new Phaser.Game(config);
     gameRef.current = game;
 
-    // 4. Pass the callback to the running scene
-    game.events.once('ready', () => {
-        // Stop the auto-started scene and restart with our React props
-        game.scene.stop('MainScene');
-        game.scene.start('MainScene', { 
-            onAgentSelect: (agent: AgentData) => onAgentSelectRef.current(agent),
-            onConversationUpdate: (detail: any) => onConversationUpdateRef.current && onConversationUpdateRef.current(detail)
-        });
+    // 4. Add and Start Scene manually with props
+    // This avoids the "start -> stop -> start" cycle that causes texture loading race conditions
+    game.scene.add('MainScene', MainScene, true, { 
+        onAgentSelect: (agent: AgentData) => onAgentSelectRef.current(agent),
+        onConversationUpdate: (detail: any) => onConversationUpdateRef.current && onConversationUpdateRef.current(detail)
     });
 
     // Handle Window Resize
     const handleResize = () => {
         if (gameRef.current && containerRef.current) {
-            gameRef.current.scale.resize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+            const w = containerRef.current.clientWidth;
+            const h = containerRef.current.clientHeight;
+            if (w > 0 && h > 0) {
+                gameRef.current.scale.resize(w, h);
+            }
         }
     };
     window.addEventListener('resize', handleResize);
