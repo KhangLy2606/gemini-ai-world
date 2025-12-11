@@ -6,15 +6,16 @@
  * Validates and integrates custom 32x32px character sprites into the game.
  * 
  * Usage:
- *   npm run ingest:character -- --file <path> --id <ID> --category <category> --name <name>
+ *   npm run ingest:character -- --file <path> --id <ID> --category <category> --name <name> [--auto-resize]
  * 
  * Example:
- *   npm run ingest:character -- --file ./matrix-neo.png --id MATRIX_NEO --category custom --name "Matrix Neo"
+ *   npm run ingest:character -- --file ./matrix-neo.png --id MATRIX_NEO --category custom --name "Matrix Neo" --auto-resize
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { Buffer } from 'buffer';
+import sharp from 'sharp';
 
 // Simple PNG dimension checker (reads PNG header)
 function getPngDimensions(buffer: any): { width: number; height: number } | null {
@@ -45,11 +46,12 @@ interface IngestOptions {
   id: string;
   category: string;
   name: string;
+  autoResize: boolean;
 }
 
 function parseArgs(): IngestOptions | null {
   const args = (process as any).argv.slice(2);
-  const options: Partial<IngestOptions> = {};
+  const options: Partial<IngestOptions> = { autoResize: false };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -61,22 +63,25 @@ function parseArgs(): IngestOptions | null {
       options.category = args[++i];
     } else if (arg === '--name' && args[i + 1]) {
       options.name = args[++i];
+    } else if (arg === '--auto-resize') {
+      options.autoResize = true;
     } else if (arg === '--help' || arg === '-h') {
       console.log(`
 Character Ingestion Tool
 
 Usage:
-  npm run ingest:character -- --file <path> --id <ID> --category <category> --name <name>
+  npm run ingest:character -- --file <path> --id <ID> --category <category> --name <name> [--auto-resize]
 
 Options:
-  --file      Path to the PNG file (required, must be 32x32px)
-  --id        Character ID in UPPER_SNAKE_CASE (required)
-  --category  Category: tech, health, service, edu, creative, custom (required)
-  --name      Display name for the character (required)
-  --help      Show this help message
+  --file        Path to the image file (required; PNG preferred)
+  --id          Character ID in UPPER_SNAKE_CASE (required)
+  --category    Category: tech, health, service, edu, creative, custom (required)
+  --name        Display name for the character (required)
+  --auto-resize Automatically resize to 32x32 with nearest-neighbor if needed
+  --help        Show this help message
 
 Example:
-  npm run ingest:character -- --file ./matrix-neo.png --id MATRIX_NEO --category custom --name "Matrix Neo"
+  npm run ingest:character -- --file ./matrix-neo.png --id MATRIX_NEO --category custom --name "Matrix Neo" --auto-resize
       `);
       return null;
     }
@@ -88,6 +93,68 @@ Example:
   }
 
   return options as IngestOptions;
+}
+
+async function prepareImage(sourcePath: string, autoResize: boolean): Promise<{ buffer: Buffer; dimensions: { width: number; height: number }; originalSize: string; }> {
+  const resolvedPath = path.resolve(sourcePath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    console.error(`❌ Error: File not found: ${resolvedPath}`);
+    (process as any).exit(1);
+  }
+
+  let metadata;
+  try {
+    metadata = await sharp(resolvedPath, { limitInputPixels: 4096 * 4096 }).metadata();
+  } catch (error) {
+    console.error('❌ Error: Unable to read image metadata. Make sure the file is a valid image.');
+    (process as any).exit(1);
+  }
+
+  const originalWidth = metadata.width || 0;
+  const originalHeight = metadata.height || 0;
+  const originalSize = `${originalWidth}x${originalHeight}px`;
+
+  if (!originalWidth || !originalHeight) {
+    console.error('❌ Error: Unable to determine image dimensions.');
+    (process as any).exit(1);
+  }
+
+  let pipeline = sharp(resolvedPath).ensureAlpha();
+
+  const needsResize = originalWidth !== 32 || originalHeight !== 32;
+  if (needsResize && !autoResize) {
+    console.error(`❌ Error: Image must be exactly 32x32 pixels. Got: ${originalSize}`);
+    console.error('   Tip: re-run with --auto-resize to automatically resize using nearest-neighbor.');
+    (process as any).exit(1);
+  }
+
+  if (needsResize) {
+    console.log(`🔧 Auto-resizing image from ${originalSize} -> 32x32 (nearest-neighbor, transparent padding)...`);
+    pipeline = pipeline.resize(32, 32, {
+      fit: 'contain',
+      position: 'centre',
+      kernel: sharp.kernel.nearest,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    });
+  }
+
+  const outputBuffer = await pipeline
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+
+  const finalDimensions = getPngDimensions(outputBuffer);
+  if (!finalDimensions) {
+    console.error('❌ Error: Processed file is not a valid PNG image.');
+    (process as any).exit(1);
+  }
+
+  if (finalDimensions.width !== 32 || finalDimensions.height !== 32) {
+    console.error(`❌ Error: Processed image must be 32x32px. Got: ${finalDimensions.width}x${finalDimensions.height}px`);
+    (process as any).exit(1);
+  }
+
+  return { buffer: outputBuffer, dimensions: finalDimensions, originalSize };
 }
 
 async function main() {
@@ -102,6 +169,7 @@ async function main() {
   console.log(`ID:       ${options.id}`);
   console.log(`Category: ${options.category}`);
   console.log(`Name:     ${options.name}`);
+  console.log(`AutoResize: ${options.autoResize ? 'enabled' : 'disabled'}`);
   console.log('');
 
   // Validate category
@@ -112,30 +180,8 @@ async function main() {
     (process as any).exit(1);
   }
 
-  // Check if file exists
-  const sourcePath = path.resolve(options.file);
-  if (!fs.existsSync(sourcePath)) {
-    console.error(`❌ Error: File not found: ${sourcePath}`);
-    (process as any).exit(1);
-  }
-
-  // Read and validate PNG
-  const buffer = fs.readFileSync(sourcePath);
-  const dimensions = getPngDimensions(buffer);
-
-  if (!dimensions) {
-    console.error('❌ Error: File is not a valid PNG image');
-    (process as any).exit(1);
-  }
-
-  console.log(`📐 Image dimensions: ${dimensions.width}x${dimensions.height}px`);
-
-  if (dimensions.width !== 32 || dimensions.height !== 32) {
-    console.error(`❌ Error: Image must be exactly 32x32 pixels`);
-    console.error(`   Got: ${dimensions.width}x${dimensions.height}px`);
-    (process as any).exit(1);
-  }
-
+  const { buffer, dimensions, originalSize } = await prepareImage(options.file, options.autoResize);
+  console.log(`📐 Image dimensions: ${dimensions.width}x${dimensions.height}px (source was ${originalSize})`);
   console.log('✅ Image validation passed');
 
   // Create target directory
@@ -151,7 +197,7 @@ async function main() {
   const targetFileName = `${options.id.toLowerCase()}.png`;
   const targetPath = path.join(customAssetsDir, targetFileName);
   
-  fs.copyFileSync(sourcePath, targetPath);
+  fs.writeFileSync(targetPath, buffer);
   console.log(`📋 Copied to: ${targetPath}`);
 
   // Generate registry entry

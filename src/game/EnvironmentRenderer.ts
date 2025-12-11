@@ -1,3 +1,4 @@
+
 // Environment Renderer
 // Handles the visual representation of the environment
 // Decouples rendering logic from the MainScene
@@ -37,7 +38,7 @@ export class EnvironmentRenderer {
       gridX: b.gridX, gridY: b.gridY, w: b.width, h: b.height 
     }));
     this.decorator.addPathways(width, height, buildingRects);
-    this.decorator.addDecorations(width, height, 0.025);
+    this.decorator.addDecorations(width, height, 0.08);
 
     // 3. Buildings
     buildings.forEach(building => this.renderBuilding(building));

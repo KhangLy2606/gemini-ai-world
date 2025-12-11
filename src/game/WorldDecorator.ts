@@ -220,39 +220,64 @@ export class WorldDecorator {
   }
 
   /**
-   * Add decorative elements (rocks, stumps, signs)
+   * Add decorative elements (rocks, stumps, flowers, mushrooms)
+   * Enhanced for better visual fidelity
    */
-  public addDecorations(width: number, height: number, density: number = 0.02): void {
+  public addDecorations(width: number, height: number, density: number = 0.05): void {
     const decorGraphics = this.scene.add.graphics();
     decorGraphics.setDepth(5); // Just above terrain
 
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         if (this.rng.random() < density) {
-          const decorType = Math.floor(this.rng.random() * 3);
-          const px = x * TILE_SIZE + TILE_SIZE / 2;
-          const py = y * TILE_SIZE + TILE_SIZE / 2;
+          const typeRoll = this.rng.random();
+          
+          // Random offset within tile to break grid look
+          const offsetX = this.rng.range(4, 28);
+          const offsetY = this.rng.range(4, 28);
+          const px = x * TILE_SIZE + offsetX;
+          const py = y * TILE_SIZE + offsetY;
 
-          if (decorType === 0) {
-            // Rock
-            decorGraphics.fillStyle(0x696969, 0.7);
-            decorGraphics.fillCircle(px, py, 4);
-            decorGraphics.fillStyle(0x505050, 0.5);
-            decorGraphics.fillCircle(px - 2, py - 1, 2);
-
-          } else if (decorType === 1) {
-            // Stump
-            decorGraphics.fillStyle(0x8b4513, 0.8);
-            decorGraphics.fillCircle(px, py, 3);
-            decorGraphics.lineStyle(1, 0x654321, 0.6);
-            decorGraphics.strokeCircle(px, py, 3);
-
+          if (typeRoll < 0.4) {
+            // Grass Tufts (Common)
+            decorGraphics.fillStyle(0x52b788, 0.5);
+            decorGraphics.fillCircle(px, py, 2);
+            decorGraphics.fillCircle(px - 2, py + 2, 2);
+            decorGraphics.fillCircle(px + 2, py + 2, 2);
+          } else if (typeRoll < 0.6) {
+            // Small Pebbles
+            decorGraphics.fillStyle(0x7f8c8d, 0.6);
+            decorGraphics.fillCircle(px, py, 1.5);
+            decorGraphics.fillStyle(0x95a5a6, 0.6);
+            decorGraphics.fillCircle(px + 3, py + 1, 1);
+          } else if (typeRoll < 0.8) {
+            // Flowers
+            const flowerColors = [0xff6b6b, 0xfeca57, 0x54a0ff, 0xff9ff3];
+            const color = this.rng.pick(flowerColors);
+            
+            // Stem
+            decorGraphics.fillStyle(0x2ecc71, 0.8);
+            decorGraphics.fillRect(px - 0.5, py, 1, 3);
+            
+            // Petals
+            decorGraphics.fillStyle(color, 0.9);
+            decorGraphics.fillCircle(px, py, 2);
+          } else if (typeRoll < 0.9) {
+            // Mushrooms
+            decorGraphics.fillStyle(0xecf0f1, 0.9); // Stalk
+            decorGraphics.fillRect(px - 1, py, 2, 3);
+            decorGraphics.fillStyle(0xe74c3c, 0.9); // Cap
+            decorGraphics.fillCircle(px, py, 2.5);
+            // Dots
+            decorGraphics.fillStyle(0xffffff, 0.8);
+            decorGraphics.fillCircle(px - 1, py - 1, 0.5);
+            decorGraphics.fillCircle(px + 1, py - 1, 0.5);
           } else {
-            // Grass tuft
-            decorGraphics.fillStyle(0x52b788, 0.6);
-            decorGraphics.fillCircle(px - 2, py, 2);
-            decorGraphics.fillCircle(px + 2, py, 2);
-            decorGraphics.fillCircle(px, py - 1, 1.5);
+            // Tree Stump or Log
+            decorGraphics.fillStyle(0x8d6e63, 0.9);
+            decorGraphics.fillCircle(px, py, 3);
+            decorGraphics.fillStyle(0xa1887f, 0.9);
+            decorGraphics.fillCircle(px, py, 2);
           }
         }
       }

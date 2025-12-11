@@ -41,7 +41,7 @@ export class EnvironmentManager {
    * Generate the entire environment layer for the world
    */
   public generateEnvironment(): EnvironmentLayer {
-    // Phase 1: Place buildings (structures)
+    // Phase 1: Place buildings (University Campus Layout)
     this.placeBuildings();
 
     // Phase 2: Place plants (vegetation)
@@ -51,35 +51,84 @@ export class EnvironmentManager {
   }
 
   /**
-   * Place buildings across the map using spatial partitioning
+   * Place buildings across the map using a University Campus layout
    */
   private placeBuildings(): void {
-    const buildingDensity = 0.08; // 8% of map area covered by buildings
-    const targetArea = (this.worldWidth * this.worldHeight) * buildingDensity;
-    let coveredArea = 0;
+    const cx = Math.floor(this.worldWidth / 2);
+    const cy = Math.floor(this.worldHeight / 2);
 
-    // Attempt to place buildings until we reach target coverage
-    const maxAttempts = 200;
-    let attempts = 0;
+    // 1. Central Quad Feature
+    this.tryPlaceBuilding(cx - 1, cy, BuildingType.FOUNTAIN); // Center fountain
 
-    const buildingTypes = Object.values(BuildingType);
+    // 2. Core University Buildings
+    // Library (North)
+    this.tryPlaceBuilding(cx - 3, cy - 8, BuildingType.LIBRARY);
+    
+    // Student Life Center (East) - Using CAFE as proxy
+    this.tryPlaceBuilding(cx + 6, cy - 2, BuildingType.CAFE);
+    
+    // Gym (West) - Using WAREHOUSE as proxy
+    this.tryPlaceBuilding(cx - 9, cy - 3, BuildingType.WAREHOUSE);
 
-    while (coveredArea < targetArea && attempts < maxAttempts) {
-      attempts++;
+    // Lab/Research (North East)
+    this.tryPlaceBuilding(cx + 6, cy - 8, BuildingType.LAB);
 
-      const buildingType = this.rng.pick(buildingTypes);
-      const config = BUILDINGS[buildingType];
+    // 3. Residential Apartments (Surrounding Ring)
+    // Using HOUSE and OFFICE (as dorms) assets
+    const dormLocations = [
+        // South Cluster
+        { x: cx - 12, y: cy + 6, type: BuildingType.HOUSE },
+        { x: cx - 8, y: cy + 8, type: BuildingType.HOUSE },
+        { x: cx - 4, y: cy + 10, type: BuildingType.HOUSE },
+        { x: cx + 4, y: cy + 10, type: BuildingType.HOUSE },
+        { x: cx + 8, y: cy + 8, type: BuildingType.HOUSE },
+        { x: cx + 12, y: cy + 6, type: BuildingType.HOUSE },
+        
+        // West Wing
+        { x: cx - 14, y: cy - 2, type: BuildingType.HOUSE },
+        { x: cx - 14, y: cy - 8, type: BuildingType.HOUSE },
 
-      // Random position
-      const x = this.rng.range(0, this.worldWidth - config.width);
-      const y = this.rng.range(0, this.worldHeight - config.height);
+        // East Wing (Faculty Housing?)
+        { x: cx + 14, y: cy + 2, type: BuildingType.HOUSE },
+    ];
 
-      // Check if space is available
+    dormLocations.forEach(loc => {
+        this.tryPlaceBuilding(loc.x, loc.y, loc.type);
+    });
+
+    // 4. Campus Decorations (Benches)
+    const benchLocations = [
+        { x: cx - 3, y: cy + 3 },
+        { x: cx + 3, y: cy + 3 },
+        { x: cx, y: cy - 3 },
+        { x: cx - 3, y: cy - 2 },
+        { x: cx + 4, y: cy - 2 },
+    ];
+
+    benchLocations.forEach(loc => {
+        this.tryPlaceBuilding(loc.x, loc.y, BuildingType.PARK_BENCH);
+    });
+
+    console.log(`Generated ${this.layer.buildings.length} buildings (University Layout)`);
+  }
+
+  /**
+   * Helper to place a specific building type at x,y
+   */
+  private tryPlaceBuilding(x: number, y: number, type: BuildingType): boolean {
+      const config = BUILDINGS[type];
+      
+      // Boundary checks
+      if (x < 1 || y < 1 || x + config.width >= this.worldWidth - 1 || y + config.height >= this.worldHeight - 1) {
+          return false;
+      }
+
+      // Check collision
       if (this.canPlaceBuilding(x, y, config.width, config.height)) {
         const building: BuildingObject = {
           id: `building-${this.buildingCount++}`,
           type: 'building',
-          buildingType,
+          buildingType: type,
           gridX: x,
           gridY: y,
           width: config.width,
@@ -90,15 +139,10 @@ export class EnvironmentManager {
         };
 
         this.layer.buildings.push(building);
-
-        // Mark tiles as occupied
         this.markBuildingOccupancy(x, y, config.width, config.height);
-
-        coveredArea += config.width * config.height;
+        return true;
       }
-    }
-
-    console.log(`Generated ${this.layer.buildings.length} buildings`);
+      return false;
   }
 
   /**
@@ -111,6 +155,11 @@ export class EnvironmentManager {
       high: 0.12     // 12% spawn chance
     };
 
+    // Create a central quad clearing
+    const cx = Math.floor(this.worldWidth / 2);
+    const cy = Math.floor(this.worldHeight / 2);
+    const quadRadius = 6;
+
     for (let x = 0; x < this.worldWidth; x++) {
       for (let y = 0; y < this.worldHeight; y++) {
         const coord = `${x},${y}`;
@@ -120,16 +169,28 @@ export class EnvironmentManager {
           continue;
         }
 
+        // Keep central quad relatively clear of large trees, mostly grass/flowers
+        const distFromCenter = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
+        let isQuad = distFromCenter < quadRadius;
+
         // Randomly select plant type based on density
         const rand = this.rng.random();
-        const densityLevel: 'low' | 'medium' | 'high' =
-          rand > 0.7 ? 'low' : rand > 0.5 ? 'medium' : 'high';
+        // Lower density in quad
+        const densityLevel: 'low' | 'medium' | 'high' = isQuad ? 'low' : 
+          (rand > 0.7 ? 'low' : rand > 0.5 ? 'medium' : 'high');
 
         const diceRoll = this.rng.random();
         const threshold = plantDensityFactors[densityLevel];
 
         if (diceRoll < threshold) {
-          const plants = getPlantsByDensity(densityLevel);
+          let plants = getPlantsByDensity(densityLevel);
+          
+          // If in quad, prefer flowers and small bushes
+          if (isQuad) {
+              plants = plants.filter(p => p.includes('FLOWER') || p.includes('GRASS') || p === PlantType.BUSH_SMALL);
+              if (plants.length === 0) continue; 
+          }
+
           const plantType = this.rng.pick(plants);
           const config = PLANTS[plantType];
 
