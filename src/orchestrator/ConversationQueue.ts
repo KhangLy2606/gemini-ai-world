@@ -1,3 +1,4 @@
+
 import { ActiveConversation } from '../../types';
 
 interface QueuedConversation {
