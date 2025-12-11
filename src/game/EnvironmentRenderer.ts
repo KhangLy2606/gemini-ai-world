@@ -295,7 +295,7 @@ export class EnvironmentRenderer {
   private renderBrickBuilding(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, building: BuildingObject): void {
     // Main body (brick)
     g.fillStyle(building.color, 1);
-    g.fillRect(x, y, w, h);
+    g.fillRect(x, y + h*0.15, w, h*0.85);
     
     // Brick pattern overlay
     g.lineStyle(1, 0xD2B48C, 0.3);
@@ -308,7 +308,7 @@ export class EnvironmentRenderer {
     
     // Slate roof
     g.fillStyle(building.secondaryColor || 0x708090, 1);
-    g.fillRect(x - 2, y - 5, w + 4, 12);
+    g.fillRect(x - 2, y, w + 4, h*0.15);
     
     // Windows (dorm-style: rows of identical windows)
     g.fillStyle(0xFFEB3B, 0.6);
@@ -353,44 +353,32 @@ export class EnvironmentRenderer {
   }
   
   private renderStadium(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, building: BuildingObject): void {
-    // Stadium base/field (green)
+    // Stands
+    g.fillStyle(building.secondaryColor || 0x708090, 1);
+    g.fillEllipse(x + w/2, y + h/2, w, h);
+    // Field
     g.fillStyle(0x228B22, 1);
-    g.fillRect(x + w*0.1, y + h*0.3, w*0.8, h*0.5);
-    
-    // Stands (tiered seating)
-    g.fillStyle(0x708090, 1);
-    // North stands
-    g.fillRect(x, y, w, h*0.25);
-    // South stands
-    g.fillRect(x, y + h*0.85, w, h*0.15);
-    // East/West stands
-    g.fillRect(x, y, w*0.1, h);
-    g.fillRect(x + w*0.9, y, w*0.1, h);
-    
-    // Seat rows
-    g.fillStyle(0xDC143C, 0.7);
-    for(let row = 0; row < 3; row++) {
-      g.fillRect(x + 5, y + 5 + row*8, w - 10, 6);
-    }
-    
-    // Field markings
+    g.fillEllipse(x + w/2, y + h/2, w*0.6, h*0.6);
+    // Field Markings
     g.lineStyle(2, 0xFFFFFF, 0.8);
-    g.strokeRect(x + w*0.15, y + h*0.35, w*0.7, h*0.4);
-    g.strokeCircle(x + w/2, y + h*0.55, 15);
+    g.strokeRect(x + w/2 - w*0.2, y + h/2 - h*0.2, w*0.4, h*0.4);
+    g.lineBetween(x + w/2, y + h/2 - h*0.2, x + w/2, y + h/2 + h*0.2);
+    // Seating Rows (simple rings)
+    g.lineStyle(2, 0xDC143C, 0.5);
+    g.strokeEllipse(x + w/2, y + h/2, w*0.8, h*0.8);
   }
   
-  private renderStatue(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+  private renderStatue(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) {
     // Pedestal
     g.fillStyle(0x708090, 1);
-    g.fillRect(x + 4, y + h*0.6, w - 8, h*0.4);
-    
-    // Statue figure (simplified)
-    g.fillStyle(0x8B7355, 1);
-    g.fillCircle(x + w/2, y + h*0.35, 6);
-    g.fillRect(x + w/2 - 4, y + h*0.4, 8, h*0.25);
+    g.fillRect(x + w*0.25, y + h*0.6, w*0.5, h*0.4);
+    // Statue Figure (abstract)
+    g.fillStyle(0x8B7355, 1); // Bronze/Stone
+    g.fillRect(x + w*0.4, y, w*0.2, h*0.6);
+    g.fillCircle(x + w*0.5, y, w*0.15); // Head
   }
   
-  private renderLamppost(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
+  private renderLamppost(g: Phaser.GameObjects.Graphics, x: number, y: number) {
     // Post
     g.fillStyle(0x2F4F4F, 1);
     g.fillRect(x + 14, y + 8, 4, 24);
@@ -403,7 +391,7 @@ export class EnvironmentRenderer {
     g.fillCircle(x + 16, y + 6, 10);
   }
   
-  private renderFountain(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+  private renderFountain(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) {
     // Basin
     g.fillStyle(0x708090, 1);
     g.fillEllipse(x + w/2, y + h*0.7, w*0.45, h*0.25);
@@ -421,21 +409,24 @@ export class EnvironmentRenderer {
     g.fillTriangle(x + w/2, y + 5, x + w/2 - 12, y + h*0.35, x + w/2 + 12, y + h*0.35);
   }
   
-  private renderCampusGate(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
-    // Iron posts
+  private renderCampusGate(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) {
+    // Pillars
     g.fillStyle(0x2F4F4F, 1);
-    g.fillRect(x, y, 8, h);
-    g.fillRect(x + w - 8, y, 8, h);
+    g.fillRect(x, y, 10, h);
+    g.fillRect(x + w - 10, y, 10, h);
     
     // Arch
-    g.lineStyle(4, 0x2F4F4F, 1);
-    g.beginPath();
-    g.arc(x + w/2, y + 10, w/2 - 4, Math.PI, 0, false);
-    g.strokePath();
-    
-    // Gold accent
+    g.lineStyle(4, 0x2F4F4F);
+    const curve = new Phaser.Curves.QuadraticBezier(
+        new Phaser.Math.Vector2(x + 5, y + 10),
+        new Phaser.Math.Vector2(x + w/2, y - 20),
+        new Phaser.Math.Vector2(x + w - 5, y + 10)
+    );
+    curve.draw(g);
+
+    // Gold Accent
     g.fillStyle(0xFFD700, 1);
-    g.fillCircle(x + w/2, y + 8, 4);
+    g.fillCircle(x + w/2, y - 5, 5);
   }
   
   private renderDefaultBuilding(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, building: BuildingObject): void {
@@ -452,7 +443,7 @@ export class EnvironmentRenderer {
     }
     
     // Windows
-    g.fillStyle(0xFFEB3B, 0.6);
+    g.fillStyle(0xffeb3b, 0.6);
     const windowSpacing = 12;
     for (let wx = x + 10; wx < x + w - 10; wx += windowSpacing) {
         for (let wy = y + 20; wy < y + h - 10; wy += windowSpacing) {
@@ -605,4 +596,4 @@ export class EnvironmentRenderer {
         this.plantsGroup.set(plant.id, graphics);
     }
   }
-}
+}}
