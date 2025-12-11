@@ -1,3 +1,4 @@
+
 // Environment Renderer
 // Handles the visual representation of the environment
 // Decouples rendering logic from the MainScene
