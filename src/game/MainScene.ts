@@ -40,6 +40,10 @@ export class MainScene extends Phaser.Scene {
   private mapWidth: number = 0;
   private mapHeight: number = 0;
 
+  // Map Dimensions
+  private mapWidth: number = 0;
+  private mapHeight: number = 0;
+
   // Mock Mode
   private isMockMode: boolean = true;
   private mockTickTimer?: Phaser.Time.TimerEvent;

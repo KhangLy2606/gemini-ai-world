@@ -175,6 +175,7 @@ export class EnvironmentRenderer {
     } 
 
     // 3. Fallback to Enhanced Procedural Graphics
+    // 3. Fallback to Enhanced Procedural Graphics
     const graphics = this.scene.add.graphics();
     const width = building.width * TILE_SIZE;
     const height = building.height * TILE_SIZE;
@@ -493,7 +494,23 @@ export class EnvironmentRenderer {
 
         // Autumn trees (orange, red, gold)
         if (plant.plantType === 'TREE_AUTUMN' || plant.plantType === 'TREE_MAPLE') {
+        // Autumn trees (orange, red, gold)
+        if (plant.plantType === 'TREE_AUTUMN' || plant.plantType === 'TREE_MAPLE') {
           // Trunk
+          graphics.fillStyle(0x8B4513, 1);
+          graphics.fillRect(x + width*0.4, y + height*0.5, width*0.2, height*0.5);
+          // Autumn foliage (layered circles)
+          graphics.fillStyle(plant.color, 1);
+          graphics.fillCircle(x + width/2, y + height/3, width/2);
+          graphics.fillStyle(plant.secondaryColor || 0xDAA520, 0.8);
+          graphics.fillCircle(x + width/2 - 8, y + height/3 - 3, width/3);
+          graphics.fillCircle(x + width/2 + 8, y + height/3 + 2, width/4);
+          // Scattered leaves
+          graphics.fillStyle(0xB22222, 0.7);
+          graphics.fillCircle(x + width/2 + 5, y + height/3 + 5, 4);
+        } else if (plant.plantType.includes('TREE')) {
+          // Regular tree
+          graphics.fillStyle(0x8B4513, 1);
           graphics.fillStyle(0x8B4513, 1);
           graphics.fillRect(x + width*0.4, y + height*0.5, width*0.2, height*0.5);
           // Autumn foliage (layered circles)
@@ -514,6 +531,34 @@ export class EnvironmentRenderer {
           if (plant.secondaryColor) {
               graphics.fillStyle(plant.secondaryColor, 0.8);
               graphics.fillCircle(x + width/2 - 5, y + height/3 - 5, width/4);
+          }
+        } else if (plant.plantType === 'HEDGE_TRIMMED') {
+          // Manicured hedge (rectangular, neat)
+          graphics.fillStyle(plant.color, 1);
+          graphics.fillRect(x + 2, y + height*0.3, width - 4, height*0.7);
+          // Trimmed top edge highlight
+          graphics.fillStyle(plant.secondaryColor || 0x3CB371, 0.8);
+          graphics.fillRect(x + 2, y + height*0.3, width - 4, 4);
+        } else if (plant.plantType === 'FLOWER_BED') {
+          // Multi-color flower arrangement
+          graphics.fillStyle(0x27AE60, 1); // Base soil/leaves
+          graphics.fillRect(x, y + height*0.5, width, height*0.5);
+          // Flowers
+          const flowerColors = [0xDC143C, 0xFFD700, 0xFF6B6B, 0x9B59B6];
+          for(let i = 0; i < 6; i++) {
+            const fx = x + 4 + (i % 3) * (width/3);
+            const fy = y + height*0.3 + Math.floor(i / 3) * 12;
+            graphics.fillStyle(flowerColors[i % flowerColors.length], 1);
+            graphics.fillCircle(fx, fy, 3);
+          }
+        } else if (plant.plantType === 'IVY_WALL') {
+          // Climbing ivy
+          graphics.fillStyle(plant.color, 1);
+          graphics.fillRect(x + width*0.3, y, width*0.4, height);
+          // Leaf clusters
+          graphics.fillStyle(plant.secondaryColor || 0x006400, 0.9);
+          for(let i = 0; i < 4; i++) {
+            graphics.fillCircle(x + width*0.3 + (i % 2) * 10, y + 8 + i * 12, 5);
           }
         } else if (plant.plantType === 'HEDGE_TRIMMED') {
           // Manicured hedge (rectangular, neat)
