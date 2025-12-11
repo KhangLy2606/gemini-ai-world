@@ -7,17 +7,20 @@ import Phaser from 'phaser';
 import { BuildingObject, PlantObject, TILE_SIZE } from '../../types';
 import { WorldDecorator } from './WorldDecorator';
 import { AutoTiler } from './AutoTiler';
-import { BuildingType } from '../config/EnvironmentRegistry';
+import { BuildingType, PlantType } from '../config/EnvironmentRegistry';
+import { ParticleEffects } from './ParticleEffects';
 
 export class EnvironmentRenderer {
   private scene: Phaser.Scene;
   private buildingsGroup: Map<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics> = new Map();
   private plantsGroup: Map<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics> = new Map();
   private decorator: WorldDecorator;
+  private particleEffects: ParticleEffects;
 
   constructor(scene: Phaser.Scene, seed: number = 12345) {
     this.scene = scene;
     this.decorator = new WorldDecorator(scene, seed);
+    this.particleEffects = new ParticleEffects(scene);
   }
 
   public render(
@@ -79,6 +82,7 @@ export class EnvironmentRenderer {
     this.buildingsGroup.clear();
     this.plantsGroup.clear();
     this.decorator.destroy();
+    this.particleEffects.destroy();
   }
 
   private addDropShadow(x: number, y: number, width: number, height: number): void {
@@ -106,12 +110,10 @@ export class EnvironmentRenderer {
         if (tileset) {
             const layer = map.createBlankLayer('terrain', tileset, 0, 0, width, height);
             if (layer) {
-                // If it's the generated 2x3 atlas, we map tiles simply
-                // The generated atlas has 6 large tiles, we probably just want tile index 0 repeating for now
-                // Or implementing autotiling if the atlas supported it.
-                // For this demo, we'll fill with index 0
                 layer.fill(0);
                 layer.setDepth(-100);
+                // Enable lighting on terrain layer if lights are active
+                // layer.setPipeline('Light2D'); 
             }
         }
     } else {
@@ -150,7 +152,19 @@ export class EnvironmentRenderer {
         sprite.setOrigin(0, 0);
         sprite.setDisplaySize(building.width * TILE_SIZE, building.height * TILE_SIZE);
         sprite.setDepth(y + building.height * TILE_SIZE);
+        
+        // Add lighting if available
+        // if (this.scene.lights.active) sprite.setPipeline('Light2D');
+
         this.buildingsGroup.set(building.id, sprite);
+        
+        // Add particle effects for specific buildings
+        if (building.buildingType === BuildingType.FOUNTAIN) {
+            this.particleEffects.addFountainEffect(x, y);
+        } else if (building.buildingType === BuildingType.LAMPPOST) {
+            this.particleEffects.addLampGlow(x, y);
+        }
+        
         return;
     }
 
@@ -205,9 +219,11 @@ export class EnvironmentRenderer {
         break;
       case BuildingType.LAMPPOST:
         this.renderLamppost(graphics, x, y);
+        this.particleEffects.addLampGlow(x, y);
         break;
       case BuildingType.FOUNTAIN:
         this.renderFountain(graphics, x, y, width, height);
+        this.particleEffects.addFountainEffect(x, y);
         break;
       case BuildingType.CAMPUS_GATE:
         this.renderCampusGate(graphics, x, y, width, height);
@@ -461,6 +477,18 @@ export class EnvironmentRenderer {
     const x = plant.gridX * TILE_SIZE;
     const y = plant.gridY * TILE_SIZE;
     
+    // Check for specific generated plant assets first
+    const specificKey = `plant-${plant.plantType}`;
+    if (this.scene.textures.exists(specificKey)) {
+        this.addDropShadow(x, y, plant.width * TILE_SIZE, plant.height * TILE_SIZE);
+        const sprite = this.scene.add.sprite(x, y, specificKey);
+        sprite.setOrigin(0, 0);
+        sprite.setDisplaySize(plant.width * TILE_SIZE, plant.height * TILE_SIZE);
+        sprite.setDepth(y + plant.height * TILE_SIZE);
+        this.plantsGroup.set(plant.id, sprite);
+        return;
+    }
+
     if (this.scene.textures.exists('plants_props_atlas')) {
         this.addDropShadow(x, y, plant.width * TILE_SIZE, plant.height * TILE_SIZE);
         let frameIndex = 0;

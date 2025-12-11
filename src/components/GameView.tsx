@@ -1,12 +1,12 @@
 
 import React, { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-import { MainScene } from '@/src/game/MainScene';
-import { AgentData, ConversationStreamEventDetail } from '@/types';
+import { MainScene } from '../game/MainScene';
+import { AgentData } from '../types';
 
 interface GameViewProps {
   onAgentSelect: (agent: AgentData) => void;
-  onConversationUpdate?: (detail: ConversationStreamEventDetail) => void;
+  onConversationUpdate?: (detail: any) => void;
 }
 
 export const GameView: React.FC<GameViewProps> = ({ onAgentSelect, onConversationUpdate }) => {
@@ -58,7 +58,7 @@ export const GameView: React.FC<GameViewProps> = ({ onAgentSelect, onConversatio
     // This avoids the "start -> stop -> start" cycle that causes texture loading race conditions
     game.scene.add('MainScene', MainScene, true, { 
         onAgentSelect: (agent: AgentData) => onAgentSelectRef.current(agent),
-        onConversationUpdate: (detail: ConversationStreamEventDetail) => onConversationUpdateRef.current && onConversationUpdateRef.current(detail)
+        onConversationUpdate: (detail: any) => onConversationUpdateRef.current && onConversationUpdateRef.current(detail)
     });
 
     // Handle Window/Container Resize
