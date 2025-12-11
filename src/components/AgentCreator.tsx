@@ -211,6 +211,7 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                   const frameX = (char.frameIndex % 16) * 32;
                   const frameY = Math.floor(char.frameIndex / 16) * 32;
                   const isSelected = selectedCharacterId === char.id;
+                  const isCustom = char.category === 'custom';
                   
                   return (
                     <button
@@ -230,7 +231,7 @@ export const AgentCreator: React.FC<AgentCreatorProps> = ({ onClose, onCreate })
                         style={{
                           backgroundImage: `url(${char.spritePath})`,
                           backgroundPosition: `-${frameX}px -${frameY}px`,
-                          backgroundSize: '512px 512px',
+                          backgroundSize: isCustom ? '32px 32px' : '512px 512px',
                           imageRendering: 'pixelated',
                         }}
                       />

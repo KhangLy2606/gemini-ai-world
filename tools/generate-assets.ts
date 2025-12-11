@@ -139,9 +139,18 @@ async function generateAssets() {
       }
 
       if (imageBase64) {
-        const filePath = path.join(assetsDir, asset.filename);
+        // Determine subdirectory based on asset type
+        const isEnvironment = asset.key.includes('tileset') || asset.key.includes('building');
+        const subDir = isEnvironment ? 'environment' : '';
+        const targetDir = path.join(assetsDir, subDir);
+        
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        
+        const filePath = path.join(targetDir, asset.filename);
         fs.writeFileSync(filePath, Buffer.from(imageBase64, 'base64'));
-        console.log(`✅ Saved: ${asset.filename}`);
+        console.log(`✅ Saved: ${subDir ? subDir + '/' : ''}${asset.filename}`);
       } else {
         console.error(`❌ Failed to generate image data for ${asset.key}`);
       }

@@ -166,3 +166,28 @@ export interface ConversationStreamEventDetail {
   status: 'typing' | 'streaming' | 'complete' | 'error' | 'cancelled';
   error?: string;
 }
+
+// --- NEW TYPES FOR DIRECTOR ---
+
+export type ConversationStatus = 'initializing' | 'generating' | 'streaming' | 'completed' | 'error';
+
+export interface ConversationParticipant {
+    agentId: string;
+    name: string;
+    role: 'initiator' | 'responder';
+}
+
+export interface ActiveConversation {
+    id: string; // conversationId
+    participants: ConversationParticipant[];
+    status: ConversationStatus;
+    startTime: number;
+    lastActivityTime: number;
+    messages: ChatMessage[];
+    topic?: string;
+    partialMessage?: PartialMessage;
+    // Mock simulation specific fields
+    isMock?: boolean;
+    mockScriptIndex?: number;
+    mockScript?: { senderIndex: 0 | 1; text: string }[];
+}

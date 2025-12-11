@@ -140,6 +140,42 @@ export const CHARACTER_REGISTRY: Record<string, CharacterDefinition> = {
     spritePath: '/assets/minions_atlas.png',
     frameIndex: 65,
   },
+
+  // ============================================
+  // Custom Characters
+  // ============================================
+  SHADOW_KNIGHT: {
+    id: 'SHADOW_KNIGHT',
+    name: 'Shadow Knight',
+    category: 'custom',
+    spriteKey: 'custom_shadow_knight',
+    spritePath: '/assets/custom/shadow_knight.png',
+    frameIndex: 0,
+  },
+  BATMAN: {
+    id: 'BATMAN',
+    name: 'Dark Vigilante',
+    category: 'custom',
+    spriteKey: 'custom_batman',
+    spritePath: '/assets/custom/batman.png',
+    frameIndex: 0,
+  },
+  SAGE: {
+    id: 'SAGE',
+    name: 'Nature Sage',
+    category: 'custom',
+    spriteKey: 'custom_sage',
+    spritePath: '/assets/custom/sage.png',
+    frameIndex: 0,
+  },
+  AGENT: {
+    id: 'AGENT',
+    name: 'Secret Agent',
+    category: 'custom',
+    spriteKey: 'custom_agent',
+    spritePath: '/assets/custom/agent.png',
+    frameIndex: 0,
+  }
 };
 
 /**

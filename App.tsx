@@ -83,8 +83,22 @@ const App: React.FC = () => {
     window.dispatchEvent(event);
   };
 
+  const handleStartChat = () => {
+      if (selectedAgent) {
+          const event = new CustomEvent('start-chat', { detail: { agentId: selectedAgent.id } });
+          window.dispatchEvent(event);
+      }
+  };
+
   const handleConversationUpdate = (detail: ConversationStreamEventDetail) => {
+      // If the selected agent is part of the conversation, update UI
+      // For MVP we assume if we are looking at an agent, we care about global chat events or just this agent's
+      // ideally we filter by agent ID involved
+      
       if (!selectedAgent) return;
+      
+      // In a real app we'd check if (detail.partialMessage.senderId === selectedAgent.id || partnerId)
+      // But for now, we'll rely on MainScene keeping selectedAgent object up to date via reference
       
       if (detail.status === 'typing') {
           setIsTyping(true);
@@ -117,14 +131,19 @@ const App: React.FC = () => {
     const frameX = (character.frameIndex % 16) * 32;
     const frameY = Math.floor(character.frameIndex / 16) * 32;
     const scale = 2.5;
-    const sheetSize = 512;
+    
+    // Check if using a custom sprite (single image) or atlas
+    const isCustom = character.category === 'custom';
+    const bgSize = isCustom 
+        ? `${32 * scale}px ${32 * scale}px` 
+        : `${512 * scale}px ${512 * scale}px`;
     
     // In a real app with missing assets, we might want to check if image loads.
     // For now, we fallback to a background color if image isn't found.
     return {
         backgroundImage: `url(${character.spritePath})`,
         backgroundPosition: `-${frameX * scale}px -${frameY * scale}px`,
-        backgroundSize: `${sheetSize * scale}px ${sheetSize * scale}px`,
+        backgroundSize: bgSize,
         width: '100%',
         height: '100%',
         imageRendering: 'pixelated' as const,
@@ -216,7 +235,7 @@ const App: React.FC = () => {
                         
                         <div className="flex-1">
                             <h3 className="text-2xl font-bold text-white">{selectedAgent.name || "Unknown Entity"}</h3>
-                            <div className="flex items-center space-x-2 mt-2">
+                            <div className="flex flex-wrap gap-2 mt-2">
                                 <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border
                                     ${selectedAgent.state === 'idle' ? 'bg-gray-800 border-gray-600 text-gray-300' : ''}
                                     ${selectedAgent.state === 'moving' ? 'bg-blue-900/30 border-blue-500 text-blue-400' : ''}
@@ -224,10 +243,20 @@ const App: React.FC = () => {
                                 `}>
                                     {selectedAgent.state}
                                 </span>
-                                <span className="text-xs text-gray-500 font-mono">
+                                <span className="text-xs text-gray-500 font-mono py-0.5">
                                     COORD: {selectedAgent.gridX}:{selectedAgent.gridY}
                                 </span>
                             </div>
+                            
+                            {/* Start Chat Button */}
+                            {selectedAgent.state === 'idle' && (
+                                <button 
+                                    onClick={handleStartChat}
+                                    className="mt-3 bg-emerald-900/50 hover:bg-emerald-800/50 border border-emerald-700/50 text-emerald-300 text-xs px-3 py-1 rounded transition-colors w-full flex items-center justify-center gap-1"
+                                >
+                                    <span>💬</span> Initiate Protocol
+                                </button>
+                            )}
                         </div>
                     </div>
 
