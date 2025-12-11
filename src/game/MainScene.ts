@@ -83,11 +83,18 @@ export class MainScene extends Phaser.Scene {
     this.load.image('procedural_grid', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAALUlEQVRYR+3QQREAAAgCQfq3tsRjg48gwD25d0vAJwAAAAAAAAAAAAAAAADgBxMvA4G0p+qjAAAAAElFTkSuQmCC'); // 32x32 transparent
     
     // Load single image assets for buildings/props if available
-    const buildings = ['OFFICE', 'HOSPITAL', 'CAFE', 'LIBRARY', 'LAB', 'WAREHOUSE', 'HOUSE', 'STORAGE'];
-    buildings.forEach(b => this.load.image(`building-${b}`, `/assets/environment/building-${b.toLowerCase()}.png`));
+    const buildings = [
+        'OFFICE', 'HOSPITAL', 'CAFE', 'LIBRARY', 'LAB', 'WAREHOUSE', 'HOUSE', 'STORAGE',
+        'CLOCK_TOWER', 'LECTURE_HALL', 'STUDENT_UNION', 'DORMITORY', 'STADIUM', 'SCIENCE_CENTER',
+        'CAMPUS_GATE', 'STATUE', 'LAMPPOST', 'BIKE_RACK', 'BULLETIN_BOARD'
+    ];
+    buildings.forEach(b => this.load.image(`building-${b}`, `/assets/environment/building-${b.toLowerCase().replace(/_/g, '-')}.png`));
     
-    this.load.image('building-PARK_BENCH', '/assets/environment/building-park-bench.png');
-    this.load.image('building-FOUNTAIN', '/assets/environment/building-fountain.png');
+    // Load plant assets
+    const plants = [
+        'TREE_AUTUMN', 'TREE_MAPLE', 'HEDGE_TRIMMED', 'FLOWER_BED', 'IVY_WALL'
+    ];
+    plants.forEach(p => this.load.image(`plant-${p}`, `/assets/environment/plant-${p.toLowerCase().replace(/_/g, '-')}.png`));
 
     // If main atlas exists
     this.load.atlas('minions_atlas', '/assets/minions_atlas.png', '/assets/minions_atlas.json');
@@ -97,6 +104,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   create() {
+    // Enable Lighting System
+    this.lights.enable();
+    this.lights.setAmbientColor(0x808080); // Neutral ambient light
+
     // Initialize Systems
     // Calculate campus dimensions based on available screen area
     // Get the game's viewport dimensions and convert to tile dimensions
@@ -354,6 +365,9 @@ export class MainScene extends Phaser.Scene {
       sprite.setOrigin(0.5, 0.5);
       container.x += TILE_SIZE / 2;
       container.y += TILE_SIZE / 2;
+      
+      // Enable lighting on agent
+      // sprite.setPipeline('Light2D');
       
       container.add(sprite);
       
