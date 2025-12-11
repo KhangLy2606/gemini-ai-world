@@ -191,3 +191,31 @@ export interface ActiveConversation {
     mockScriptIndex?: number;
     mockScript?: { senderIndex: 0 | 1; text: string }[];
 }
+
+// --- ORCHESTRATOR TYPES ---
+
+export type ConversationPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface ConversationRequest {
+    initiatorId: string;
+    targetId: string;
+    topic?: string;
+    priority: ConversationPriority;
+    userInitiated: boolean;
+    requestedAt: number;
+}
+
+export interface OrchestratorStats {
+    activeConversations: number;
+    queuedConversations: number;
+    totalConversationsToday: number;
+    averageConversationDuration: number;
+    messagesPerMinute: number;
+}
+
+export interface AgentAvailabilityStatus {
+    agentId: string;
+    isAvailable: boolean;
+    currentConversationId?: string;
+    busyReason?: 'chatting' | 'moving' | 'offline';
+}
