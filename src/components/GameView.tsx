@@ -61,21 +61,24 @@ export const GameView: React.FC<GameViewProps> = ({ onAgentSelect, onConversatio
         onConversationUpdate: (detail: ConversationStreamEventDetail) => onConversationUpdateRef.current && onConversationUpdateRef.current(detail)
     });
 
-    // Handle Window Resize
-    const handleResize = () => {
-        if (gameRef.current && containerRef.current) {
-            const w = containerRef.current.clientWidth;
-            const h = containerRef.current.clientHeight;
-            if (w > 0 && h > 0) {
-                gameRef.current.scale.resize(w, h);
-            }
+    // Handle Window/Container Resize
+    const resizeObserver = new ResizeObserver((entries) => {
+        if (!gameRef.current || !entries[0]) return;
+        
+        const { width, height } = entries[0].contentRect;
+        
+        if (width > 0 && height > 0) {
+            gameRef.current.scale.resize(width, height);
         }
-    };
-    window.addEventListener('resize', handleResize);
+    });
+
+    if (containerRef.current) {
+        resizeObserver.observe(containerRef.current);
+    }
 
     // 5. Cleanup
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       
       if (gameRef.current) {
         // The MainScene handles socket disconnection via its own SHUTDOWN event listener

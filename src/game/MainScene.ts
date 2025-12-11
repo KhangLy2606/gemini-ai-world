@@ -35,6 +35,10 @@ export class MainScene extends Phaser.Scene {
   private environmentRenderer!: EnvironmentRenderer;
   private collisionManager!: CollisionManager;
   private conversationDirector!: ConversationDirector;
+  
+  // Map Dimensions
+  private mapWidth: number = 0;
+  private mapHeight: number = 0;
 
   // Mock Mode
   private isMockMode: boolean = true;
@@ -90,14 +94,22 @@ export class MainScene extends Phaser.Scene {
 
   create() {
     // Initialize Systems
-    const mapWidth = 40;
-    const mapHeight = 30;
+    // Calculate campus dimensions based on available screen area
+    // Get the game's viewport dimensions and convert to tile dimensions
+    const gameWidth = this.scale.width;
+    const gameHeight = this.scale.height;
     
-    this.environmentManager = new EnvironmentManager(mapWidth, mapHeight);
+    // Calculate map dimensions in tiles to fill the available screen area
+    // We add some padding (2x zoom factor) to ensure the map extends beyond the viewport
+    const zoomFactor = 1.5; // Current default zoom
+    this.mapWidth = Math.ceil((gameWidth * zoomFactor) / TILE_SIZE);
+    this.mapHeight = Math.ceil((gameHeight * zoomFactor) / TILE_SIZE);
+    
+    this.environmentManager = new EnvironmentManager(this.mapWidth, this.mapHeight);
     const envData = this.environmentManager.generateEnvironment();
     
     this.environmentRenderer = new EnvironmentRenderer(this);
-    this.environmentRenderer.render(mapWidth, mapHeight, envData.buildings, envData.plants);
+    this.environmentRenderer.render(this.mapWidth, this.mapHeight, envData.buildings, envData.plants);
     
     this.collisionManager = new CollisionManager(this.environmentManager);
     
@@ -106,9 +118,9 @@ export class MainScene extends Phaser.Scene {
     });
 
     // Camera Setup
-    this.cameras.main.setBounds(0, 0, mapWidth * TILE_SIZE, mapHeight * TILE_SIZE);
-    this.cameras.main.setZoom(1.5);
-    this.cameras.main.centerOn(mapWidth * TILE_SIZE / 2, mapHeight * TILE_SIZE / 2);
+    this.cameras.main.setBounds(0, 0, this.mapWidth * TILE_SIZE, this.mapHeight * TILE_SIZE);
+    this.cameras.main.setZoom(zoomFactor);
+    this.cameras.main.centerOn(this.mapWidth * TILE_SIZE / 2, this.mapHeight * TILE_SIZE / 2);
 
     // Input: Keyboard & Zoom
     if (this.input.keyboard) {
@@ -380,8 +392,8 @@ export class MainScene extends Phaser.Scene {
                 name: def.name,
                 bio: def.bio,
                 job: def.job as JobRole, // This cast is valid if JobRole matches the string in definition
-                gridX: Math.floor(Math.random() * 20) + 5,
-                gridY: Math.floor(Math.random() * 15) + 5,
+                gridX: Math.floor(Math.random() * Math.max(1, this.mapWidth - 10)) + 5,
+                gridY: Math.floor(Math.random() * Math.max(1, this.mapHeight - 10)) + 5,
                 state: 'idle',
                 color: Math.random() * 0xffffff,
                 activeConversation: []

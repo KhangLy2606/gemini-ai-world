@@ -3,6 +3,7 @@
 // Defines buildings, plants, and infrastructure for world enrichment
 
 export enum BuildingType {
+  // Original types
   OFFICE = 'OFFICE',
   HOUSE = 'HOUSE',
   LIBRARY = 'LIBRARY',
@@ -12,10 +13,26 @@ export enum BuildingType {
   LAB = 'LAB',
   PARK_BENCH = 'PARK_BENCH',
   FOUNTAIN = 'FOUNTAIN',
-  STORAGE = 'STORAGE'
+  STORAGE = 'STORAGE',
+  
+  // University Campus Buildings
+  CLOCK_TOWER = 'CLOCK_TOWER',
+  LECTURE_HALL = 'LECTURE_HALL',
+  STUDENT_UNION = 'STUDENT_UNION',
+  DORMITORY = 'DORMITORY',
+  STADIUM = 'STADIUM',
+  SCIENCE_CENTER = 'SCIENCE_CENTER',
+  
+  // Campus Props
+  STATUE = 'STATUE',
+  LAMPPOST = 'LAMPPOST',
+  BIKE_RACK = 'BIKE_RACK',
+  BULLETIN_BOARD = 'BULLETIN_BOARD',
+  CAMPUS_GATE = 'CAMPUS_GATE'
 }
 
 export enum PlantType {
+  // Original types
   TREE_OAK = 'TREE_OAK',
   TREE_PINE = 'TREE_PINE',
   BUSH_SMALL = 'BUSH_SMALL',
@@ -25,7 +42,14 @@ export enum PlantType {
   FLOWER_YELLOW = 'FLOWER_YELLOW',
   GRASS_PATCH = 'GRASS_PATCH',
   HEDGE = 'HEDGE',
-  BAMBOO = 'BAMBOO'
+  BAMBOO = 'BAMBOO',
+  
+  // University Campus Plants (Autumn Theme)
+  TREE_AUTUMN = 'TREE_AUTUMN',
+  TREE_MAPLE = 'TREE_MAPLE',
+  HEDGE_TRIMMED = 'HEDGE_TRIMMED',
+  FLOWER_BED = 'FLOWER_BED',
+  IVY_WALL = 'IVY_WALL'
 }
 
 export interface BuildingConfig {
@@ -126,6 +150,94 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     roofColor: 0x3a2a1a,
     isPassable: false,
     occupyLand: true
+  },
+  
+  // University Campus Buildings
+  [BuildingType.CLOCK_TOWER]: {
+    width: 3,
+    height: 5,
+    color: 0xD4C4A8,  // Gothic stone
+    roofColor: 0x708090, // Slate gray
+    isPassable: false,
+    occupyLand: true
+  },
+  [BuildingType.LECTURE_HALL]: {
+    width: 6,
+    height: 4,
+    color: 0xA0522D,  // Brick red
+    roofColor: 0x708090, // Slate
+    isPassable: false,
+    occupyLand: true
+  },
+  [BuildingType.STUDENT_UNION]: {
+    width: 5,
+    height: 3,
+    color: 0xD4C4A8,  // Stone
+    roofColor: 0x2E8B57, // Copper green
+    isPassable: false,
+    occupyLand: true
+  },
+  [BuildingType.DORMITORY]: {
+    width: 4,
+    height: 5,
+    color: 0xA0522D,  // Brick
+    roofColor: 0x708090, // Slate
+    isPassable: false,
+    occupyLand: true
+  },
+  [BuildingType.STADIUM]: {
+    width: 8,
+    height: 6,
+    color: 0x8B7355,  // Dark stone
+    roofColor: 0x404040,
+    isPassable: false,
+    occupyLand: true
+  },
+  [BuildingType.SCIENCE_CENTER]: {
+    width: 5,
+    height: 4,
+    color: 0xB0C4DE,  // Light steel blue (modern glass)
+    roofColor: 0x708090,
+    isPassable: false,
+    occupyLand: true
+  },
+  
+  // Campus Props
+  [BuildingType.STATUE]: {
+    width: 1,
+    height: 1,
+    color: 0x708090,  // Stone gray
+    isPassable: true,
+    occupyLand: false
+  },
+  [BuildingType.LAMPPOST]: {
+    width: 1,
+    height: 1,
+    color: 0x2F4F4F,  // Dark slate
+    isPassable: true,
+    occupyLand: false
+  },
+  [BuildingType.BIKE_RACK]: {
+    width: 2,
+    height: 1,
+    color: 0x4682B4,  // Steel blue
+    isPassable: true,
+    occupyLand: false
+  },
+  [BuildingType.BULLETIN_BOARD]: {
+    width: 1,
+    height: 1,
+    color: 0x8B4513,  // Wood brown
+    isPassable: true,
+    occupyLand: false
+  },
+  [BuildingType.CAMPUS_GATE]: {
+    width: 3,
+    height: 2,
+    color: 0x2F4F4F,  // Dark iron
+    roofColor: 0xFFD700, // Gold accent
+    isPassable: true,
+    occupyLand: false
   }
 };
 
@@ -208,6 +320,48 @@ export const PLANTS: Record<PlantType, PlantConfig> = {
     height: 2,
     color: 0x52b788,
     leafColor: 0x95d5b2,
+    canWalkThrough: true,
+    density: 'low'
+  },
+  
+  // University Campus Plants (Autumn Theme)
+  [PlantType.TREE_AUTUMN]: {
+    width: 2,
+    height: 2,
+    color: 0xD2691E,  // Orange
+    leafColor: 0xB22222, // Red accent
+    canWalkThrough: false,
+    density: 'low'
+  },
+  [PlantType.TREE_MAPLE]: {
+    width: 2,
+    height: 2,
+    color: 0xDAA520,  // Gold
+    leafColor: 0xD2691E, // Orange
+    canWalkThrough: false,
+    density: 'low'
+  },
+  [PlantType.HEDGE_TRIMMED]: {
+    width: 2,
+    height: 1,
+    color: 0x2E8B57,  // Sea green (manicured)
+    leafColor: 0x3CB371,
+    canWalkThrough: false,
+    density: 'medium'
+  },
+  [PlantType.FLOWER_BED]: {
+    width: 2,
+    height: 1,
+    color: 0xDC143C,  // Crimson
+    leafColor: 0xFFD700, // Gold
+    canWalkThrough: true,
+    density: 'medium'
+  },
+  [PlantType.IVY_WALL]: {
+    width: 1,
+    height: 2,
+    color: 0x228B22,  // Forest green
+    leafColor: 0x006400, // Dark green
     canWalkThrough: true,
     density: 'low'
   }

@@ -52,64 +52,116 @@ export class EnvironmentManager {
 
   /**
    * Place buildings across the map using a University Campus layout
+   * Zone-based layout inspired by The Sims University
    */
   private placeBuildings(): void {
     const cx = Math.floor(this.worldWidth / 2);
     const cy = Math.floor(this.worldHeight / 2);
 
-    // 1. Central Quad Feature
-    this.tryPlaceBuilding(cx - 1, cy, BuildingType.FOUNTAIN); // Center fountain
-
-    // 2. Core University Buildings
-    // Library (North)
-    this.tryPlaceBuilding(cx - 3, cy - 8, BuildingType.LIBRARY);
+    // ========================================
+    // ZONE 1: Central Quad (Heart of Campus)
+    // ========================================
     
-    // Student Life Center (East) - Using CAFE as proxy
-    this.tryPlaceBuilding(cx + 6, cy - 2, BuildingType.CAFE);
+    // Iconic Clock Tower (center-north of quad)
+    this.tryPlaceBuilding(cx - 1, cy - 4, BuildingType.CLOCK_TOWER);
     
-    // Gym (West) - Using WAREHOUSE as proxy
-    this.tryPlaceBuilding(cx - 9, cy - 3, BuildingType.WAREHOUSE);
+    // Central Fountain
+    this.tryPlaceBuilding(cx - 1, cy, BuildingType.FOUNTAIN);
+    
+    // Statue near fountain
+    this.tryPlaceBuilding(cx + 2, cy - 1, BuildingType.STATUE);
+    this.tryPlaceBuilding(cx - 3, cy - 1, BuildingType.STATUE);
+    
+    // Benches around the quad
+    const quadBenches = [
+      { x: cx - 4, y: cy + 2 },
+      { x: cx + 3, y: cy + 2 },
+      { x: cx - 4, y: cy - 2 },
+      { x: cx + 3, y: cy - 2 },
+      { x: cx, y: cy + 3 },
+    ];
+    quadBenches.forEach(loc => this.tryPlaceBuilding(loc.x, loc.y, BuildingType.PARK_BENCH));
 
-    // Lab/Research (North East)
-    this.tryPlaceBuilding(cx + 6, cy - 8, BuildingType.LAB);
+    // ========================================
+    // ZONE 2: Academic Zone (North)
+    // ========================================
+    
+    // Library (grand, north-west)
+    this.tryPlaceBuilding(cx - 8, cy - 10, BuildingType.LIBRARY);
+    
+    // Lecture Hall (north-east)
+    this.tryPlaceBuilding(cx + 3, cy - 10, BuildingType.LECTURE_HALL);
+    
+    // Science Center (modern, north-far-east)
+    this.tryPlaceBuilding(cx + 10, cy - 8, BuildingType.SCIENCE_CENTER);
+    
+    // Lab (north-far-west)
+    this.tryPlaceBuilding(cx - 13, cy - 8, BuildingType.LAB);
+    
+    // Bulletin boards near academic buildings
+    this.tryPlaceBuilding(cx - 3, cy - 8, BuildingType.BULLETIN_BOARD);
+    this.tryPlaceBuilding(cx + 1, cy - 8, BuildingType.BULLETIN_BOARD);
 
-    // 3. Residential Apartments (Surrounding Ring)
-    // Using HOUSE and OFFICE (as dorms) assets
+    // ========================================
+    // ZONE 3: Residential Zone (South)
+    // ========================================
+    
+    // Dormitories (cluster in south)
     const dormLocations = [
-        // South Cluster
-        { x: cx - 12, y: cy + 6, type: BuildingType.HOUSE },
-        { x: cx - 8, y: cy + 8, type: BuildingType.HOUSE },
-        { x: cx - 4, y: cy + 10, type: BuildingType.HOUSE },
-        { x: cx + 4, y: cy + 10, type: BuildingType.HOUSE },
-        { x: cx + 8, y: cy + 8, type: BuildingType.HOUSE },
-        { x: cx + 12, y: cy + 6, type: BuildingType.HOUSE },
-        
-        // West Wing
-        { x: cx - 14, y: cy - 2, type: BuildingType.HOUSE },
-        { x: cx - 14, y: cy - 8, type: BuildingType.HOUSE },
-
-        // East Wing (Faculty Housing?)
-        { x: cx + 14, y: cy + 2, type: BuildingType.HOUSE },
+      { x: cx - 10, y: cy + 6 },
+      { x: cx - 5, y: cy + 8 },
+      { x: cx + 1, y: cy + 8 },
+      { x: cx + 6, y: cy + 6 },
     ];
+    dormLocations.forEach(loc => this.tryPlaceBuilding(loc.x, loc.y, BuildingType.DORMITORY));
+    
+    // Bike racks near dorms
+    this.tryPlaceBuilding(cx - 8, cy + 5, BuildingType.BIKE_RACK);
+    this.tryPlaceBuilding(cx + 4, cy + 5, BuildingType.BIKE_RACK);
 
-    dormLocations.forEach(loc => {
-        this.tryPlaceBuilding(loc.x, loc.y, loc.type);
-    });
+    // ========================================
+    // ZONE 4: Recreation Zone (East)
+    // ========================================
+    
+    // Student Union
+    this.tryPlaceBuilding(cx + 12, cy - 2, BuildingType.STUDENT_UNION);
+    
+    // Café
+    this.tryPlaceBuilding(cx + 12, cy + 3, BuildingType.CAFE);
+    
+    // Benches near student union
+    this.tryPlaceBuilding(cx + 11, cy + 1, BuildingType.PARK_BENCH);
 
-    // 4. Campus Decorations (Benches)
-    const benchLocations = [
-        { x: cx - 3, y: cy + 3 },
-        { x: cx + 3, y: cy + 3 },
-        { x: cx, y: cy - 3 },
-        { x: cx - 3, y: cy - 2 },
-        { x: cx + 4, y: cy - 2 },
+    // ========================================
+    // ZONE 5: Sports Zone (West)
+    // ========================================
+    
+    // Stadium (large, west side)
+    this.tryPlaceBuilding(cx - 16, cy - 2, BuildingType.STADIUM);
+    
+    // Gym (using warehouse as proxy)
+    this.tryPlaceBuilding(cx - 16, cy + 5, BuildingType.WAREHOUSE);
+
+    // ========================================
+    // ZONE 6: Campus Perimeter
+    // ========================================
+    
+    // Campus gates
+    this.tryPlaceBuilding(cx - 1, cy + 12, BuildingType.CAMPUS_GATE);  // Main entrance (south)
+    this.tryPlaceBuilding(cx + 15, cy - 1, BuildingType.CAMPUS_GATE);  // East entrance
+    
+    // Lampposts along main paths
+    const lamppostLocations = [
+      { x: cx - 6, y: cy + 5 },
+      { x: cx + 5, y: cy + 5 },
+      { x: cx - 6, y: cy - 6 },
+      { x: cx + 5, y: cy - 6 },
+      { x: cx, y: cy + 8 },
+      { x: cx, y: cy - 6 },
     ];
+    lamppostLocations.forEach(loc => this.tryPlaceBuilding(loc.x, loc.y, BuildingType.LAMPPOST));
 
-    benchLocations.forEach(loc => {
-        this.tryPlaceBuilding(loc.x, loc.y, BuildingType.PARK_BENCH);
-    });
-
-    console.log(`Generated ${this.layer.buildings.length} buildings (University Layout)`);
+    console.log(`Generated ${this.layer.buildings.length} buildings (University Campus Layout)`);
   }
 
   /**
